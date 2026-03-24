@@ -1,0 +1,6 @@
+@JuggleNet6.Backend_HostAddress = http://localhost:5242
+
+GET {{JuggleNet6.Backend_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

@@ -1,0 +1,42 @@
+import { createRouter, createWebHistory } from 'vue-router'
+
+const routes = [
+  {
+    path: '/login',
+    component: () => import('../views/Login.vue')
+  },
+  {
+    path: '/',
+    component: () => import('../views/Layout.vue'),
+    redirect: '/flow/define',
+    children: [
+      { path: 'flow/define', component: () => import('../views/flow/FlowDefinitionList.vue') },
+      { path: 'flow/list',   component: () => import('../views/flow/FlowInfoList.vue') },
+      { path: 'flow/version/:flowKey', component: () => import('../views/flow/FlowVersionList.vue') },
+      { path: 'suite/list',  component: () => import('../views/suite/SuiteList.vue') },
+      { path: 'suite/api/:suiteCode/:suiteId', component: () => import('../views/suite/ApiList.vue') },
+      { path: 'object/list', component: () => import('../views/object/ObjectList.vue') },
+      { path: 'system/token',      component: () => import('../views/system/TokenList.vue') },
+      { path: 'system/datasource', component: () => import('../views/system/DataSourceList.vue') }
+    ]
+  },
+  {
+    path: '/design/:flowKey',
+    component: () => import('../views/flow/FlowDesign.vue')
+  }
+]
+
+const router = createRouter({
+  history: createWebHistory(),
+  routes
+})
+
+// 路由守卫
+router.beforeEach((to) => {
+  const token = localStorage.getItem('token')
+  if (to.path !== '/login' && !token) {
+    return '/login'
+  }
+})
+
+export default router
