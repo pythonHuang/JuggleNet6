@@ -17,6 +17,7 @@
         <el-button size="small" @click="addNode('END')" :disabled="hasEnd" class="tb-btn-end">⏹ 结束</el-button>
       </div>
       <div class="toolbar-right">
+        <el-button size="small" @click="autoLayout" icon="Grid">自动布局</el-button>
         <el-button size="small" @click="paramDrawer = true" icon="Setting">流程参数</el-button>
         <el-button size="small" @click="variableDrawer = true" icon="List">变量</el-button>
         <el-button size="small" type="warning" @click="openDebug">调试</el-button>
@@ -26,71 +27,47 @@
     </div>
 
     <div class="designer-body">
-      <!-- 左侧节点列表 -->
-      <div class="left-panel">
-        <div class="panel-title">节点列表（{{ nodes.length }}）</div>
-        <div v-for="node in nodes" :key="node.key"
-          class="node-item" :class="selectedNodeKey === node.key ? 'node-selected' : ''"
-          @click="selectNode(node)">
-          <span class="node-icon-badge" :class="'badge-' + node.elementType.toLowerCase()">
-            {{ nodeIcon(node.elementType) }}
-          </span>
-          <div class="node-info">
-            <div class="node-type-label">{{ nodeTypeName(node.elementType) }}</div>
-            <div class="node-key-label">{{ node.label || node.key }}</div>
-          </div>
-          <el-button size="small" type="danger" circle icon="Delete"
-            @click.stop="removeNode(node.key)" style="margin-left:auto;flex-shrink:0" />
-        </div>
-        <el-empty v-if="nodes.length === 0" description="从工具栏添加节点" :image-size="60" />
-      </div>
+      <!-- 中间 VueFlow 画布 -->
+      <div class="canvas-area" ref="canvasRef">
+        <VueFlow
+          v-model:nodes="vfNodes"
+          v-model:edges="vfEdges"
+          :default-viewport="{ x: 60, y: 40, zoom: 1 }"
+          :min-zoom="0.2"
+          :max-zoom="2"
+          :snap-to-grid="true"
+          :snap-grid="[16, 16]"
+          fit-view-on-init
+          @node-click="onVfNodeClick"
+          @edge-click="onVfEdgeClick"
+          @connect="onVfConnect"
+          @edge-update="onVfEdgeUpdate"
+          class="vf-canvas"
+        >
+          <Background :variant="'dots'" :gap="20" :size="1.2" :color="'#d0d7e3'" />
+          <Controls />
+          <MiniMap :node-color="vfNodeColor" :node-border-radius="8" />
 
-      <!-- 中间流程图 -->
-      <div class="canvas-area">
-        <div class="flow-hint" v-if="nodes.length === 0">
+          <!-- 自定义节点模板 -->
+          <template #node-juggle="{ data }">
+            <div
+              class="jg-node"
+              :class="['jg-' + data.elementType.toLowerCase(), selectedNodeKey === data.nodeKey ? 'jg-selected' : '']"
+              @click.stop="selectNodeByKey(data.nodeKey)"
+            >
+              <Handle type="target" :position="Position.Top" class="jg-handle jg-handle-top" />
+              <div class="jg-icon">{{ nodeIcon(data.elementType) }}</div>
+              <div class="jg-name">{{ data.label || data.nodeKey }}</div>
+              <div class="jg-type">{{ nodeTypeName(data.elementType) }}</div>
+              <Handle type="source" :position="Position.Bottom" class="jg-handle jg-handle-bottom" />
+            </div>
+          </template>
+        </VueFlow>
+
+        <!-- 空状态提示 -->
+        <div class="flow-hint" v-if="vfNodes.length === 0">
           <div style="font-size:48px;color:#ddd">⬡</div>
-          <p>从工具栏添加节点，构建您的流程</p>
-        </div>
-        <div class="flow-chart" v-else>
-          <div v-for="(node, idx) in nodes" :key="node.key" class="flow-node-wrap">
-            <!-- CONDITION 节点：展示分支 -->
-            <template v-if="node.elementType === 'CONDITION'">
-              <div class="flow-node" :class="['fn-condition', selectedNodeKey === node.key ? 'fn-selected' : '']"
-                @click="selectNode(node)">
-                <div class="fn-icon">◆</div>
-                <div class="fn-name">{{ node.label || node.key }}</div>
-                <div class="fn-type">条件</div>
-              </div>
-              <div class="condition-branches" v-if="node.conditions && node.conditions.length">
-                <div v-for="cond in node.conditions" :key="cond.conditionName" class="branch-line">
-                  <div class="branch-arrow">→</div>
-                  <div class="branch-label" :class="cond.conditionType === 'DEFAULT' ? 'branch-default' : 'branch-custom'">
-                    {{ cond.conditionName || (cond.conditionType === 'DEFAULT' ? 'else' : cond.expression) }}
-                  </div>
-                  <div class="branch-target">{{ cond.outgoing || '未设置' }}</div>
-                </div>
-              </div>
-            </template>
-            <!-- MERGE 节点 -->
-            <template v-else-if="node.elementType === 'MERGE'">
-              <div class="flow-node fn-merge" :class="selectedNodeKey === node.key ? 'fn-selected' : ''"
-                @click="selectNode(node)">
-                <div class="fn-icon">⇒</div>
-                <div class="fn-name">{{ node.label || node.key }}</div>
-                <div class="fn-type">聚合</div>
-              </div>
-            </template>
-            <!-- 其他节点 -->
-            <template v-else>
-              <div class="flow-node" :class="['fn-' + node.elementType.toLowerCase(), selectedNodeKey === node.key ? 'fn-selected' : '']"
-                @click="selectNode(node)">
-                <div class="fn-icon">{{ nodeIcon(node.elementType) }}</div>
-                <div class="fn-name">{{ getNodeLabel(node) }}</div>
-                <div class="fn-type">{{ nodeTypeName(node.elementType) }}</div>
-              </div>
-            </template>
-            <div class="fn-arrow" v-if="idx < nodes.length - 1">↓</div>
-          </div>
+          <p>从工具栏点击按钮添加节点，然后拖拽连接线建立流程</p>
         </div>
       </div>
 
@@ -99,6 +76,8 @@
         <div class="panel-title" v-if="selectedNode">
           <span :class="'type-dot-' + selectedNode.elementType.toLowerCase()">●</span>
           {{ nodeTypeName(selectedNode.elementType) }} 属性
+          <el-button size="small" type="danger" link icon="Delete"
+            style="margin-left:auto" @click="removeNode(selectedNode.key)">删除</el-button>
         </div>
         <div class="panel-title" v-else>节点属性</div>
 
@@ -109,7 +88,8 @@
           </div>
           <div class="prop-item">
             <label>节点标签</label>
-            <el-input v-model="selectedNode.label" placeholder="可选显示名称" size="small" />
+            <el-input v-model="selectedNode.label" placeholder="可选显示名称" size="small"
+              @input="syncVfNodeLabel(selectedNode)" />
           </div>
 
           <!-- START 节点 -->
@@ -124,15 +104,7 @@
 
           <!-- MERGE 节点 -->
           <template v-if="selectedNode.elementType === 'MERGE'">
-            <div class="prop-tip">聚合节点：将多个 CONDITION 分支汇聚到一个执行路径。所有分支执行完后继续往后。</div>
-            <div class="prop-item" style="margin-top:16px">
-              <label>后续节点</label>
-              <el-select v-model="selectedNode.outgoings[0]" placeholder="选择下一节点" size="small"
-                style="width:100%" clearable @change="onOutgoingChange">
-                <el-option v-for="n in otherNodes" :key="n.key" :value="n.key"
-                  :label="`${nodeTypeName(n.elementType)}: ${n.label || n.key}`" />
-              </el-select>
-            </div>
+            <div class="prop-tip">聚合节点：将多个 CONDITION 分支汇聚到一个执行路径。通过画布连线设置入口和出口。</div>
           </template>
 
           <!-- METHOD 节点属性 -->
@@ -293,7 +265,7 @@
 
           <!-- CONDITION 节点属性 -->
           <template v-if="selectedNode.elementType === 'CONDITION'">
-            <div class="prop-tip">条件节点：根据表达式选择分支，分支可汇聚到 MERGE 聚合节点。</div>
+            <div class="prop-tip">条件节点：每个分支连接到不同的目标节点（通过画布连线），在此设置判断表达式。</div>
             <div class="prop-section-title">
               条件分支
               <el-button size="small" icon="Plus" link @click="addCondition" style="margin-left:auto">添加</el-button>
@@ -313,7 +285,7 @@
                 size="small" style="margin-bottom:4px" />
               <div style="display:flex;align-items:center;gap:4px">
                 <span style="font-size:12px;color:#666;white-space:nowrap;flex-shrink:0">跳转→</span>
-                <el-select v-model="cond.outgoing" placeholder="下一节点" size="small" style="flex:1">
+                <el-select v-model="cond.outgoing" placeholder="下一节点（或从画布连线）" size="small" style="flex:1" clearable>
                   <el-option v-for="n in otherNodes" :key="n.key" :value="n.key"
                     :label="`${nodeTypeName(n.elementType)}: ${n.label || n.key}`" />
                 </el-select>
@@ -321,18 +293,12 @@
             </div>
           </template>
 
-          <!-- 后续节点（非CONDITION、非END、非MERGE） -->
-          <div class="prop-item" style="margin-top:16px"
-            v-if="!['CONDITION','END','MERGE'].includes(selectedNode.elementType)">
-            <label>后续节点</label>
-            <el-select v-model="selectedNode.outgoings[0]" placeholder="选择下一节点" size="small"
-              style="width:100%" clearable @change="onOutgoingChange">
-              <el-option v-for="n in otherNodes" :key="n.key" :value="n.key"
-                :label="`${nodeTypeName(n.elementType)}: ${n.label || n.key}`" />
-            </el-select>
+          <!-- 连线提示（所有节点通用） -->
+          <div class="prop-tip" style="margin-top:12px;background:#e6f4ff;color:#1890ff">
+            💡 <b>连线方式：</b>拖动节点底部蓝色连接点到目标节点顶部，即可建立连线。也可直接在画布上拖动节点改变位置。
           </div>
         </div>
-        <el-empty v-else description="点击节点查看/编辑属性" :image-size="60" style="padding-top:40px" />
+        <el-empty v-else description="点击画布中的节点查看/编辑属性" :image-size="60" style="padding-top:40px" />
       </div>
     </div>
 
@@ -456,7 +422,7 @@
           <el-button type="primary" @click="saveVariables">保存变量</el-button>
         </div>
       </div>
-      <!-- 添加变量对话框 -->
+
       <el-dialog v-model="varDialogVisible" title="添加变量" width="420px" append-to-body>
         <el-form :model="varForm" label-width="80px" size="small">
           <el-form-item label="变量Code">
@@ -521,22 +487,49 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import request from '../../utils/request'
+
+// VueFlow
+import { VueFlow, Position } from '@vue-flow/core'
+import type { NodeMouseEvent, EdgeMouseEvent, Connection } from '@vue-flow/core'
+import { Background } from '@vue-flow/background'
+import { Controls } from '@vue-flow/controls'
+import { MiniMap } from '@vue-flow/minimap'
+import { Handle } from '@vue-flow/core'
+import '@vue-flow/core/dist/style.css'
+import '@vue-flow/core/dist/theme-default.css'
+import '@vue-flow/controls/dist/style.css'
+import '@vue-flow/minimap/dist/style.css'
 
 const route = useRoute()
 const router = useRouter()
 const flowKey = route.params.flowKey as string
 
+// ====== 业务节点数据（原格式） ======
 const flowInfo = ref<any>(null)
-const nodes = ref<any[]>([])
+const businessNodes = ref<any[]>([])   // 原始节点数据，与后端格式一致
 const selectedNodeKey = ref<string | null>(null)
 const allVariables = ref<any[]>([])
 const apiOptions = ref<any[]>([])
 const dataSources = ref<any[]>([])
 const methodApiSelection = ref<any[]>([])
+
+// ====== VueFlow 节点/边 ======
+const vfNodes = ref<any[]>([])
+const vfEdges = ref<any[]>([])
+
+// 节点颜色（minimap用）
+function vfNodeColor(node: any) {
+  const map: Record<string, string> = {
+    start: '#52c41a', end: '#ff4d4f', method: '#1890ff',
+    assign: '#722ed1', code: '#eb2f96', mysql: '#13c2c2',
+    condition: '#fa8c16', merge: '#7c3aed'
+  }
+  return map[node.data?.elementType?.toLowerCase()] || '#aaa'
+}
 
 // 流程参数
 const paramDrawer = ref(false)
@@ -558,10 +551,10 @@ const debugResultStr = computed(() => debugResult.value ? JSON.stringify(debugRe
 
 const dataTypes = ['string', 'integer', 'double', 'boolean', 'object', 'array']
 
-const selectedNode = computed(() => nodes.value.find(n => n.key === selectedNodeKey.value) || null)
-const hasStart = computed(() => nodes.value.some(n => n.elementType === 'START'))
-const hasEnd = computed(() => nodes.value.some(n => n.elementType === 'END'))
-const otherNodes = computed(() => nodes.value.filter(n => n.key !== selectedNodeKey.value))
+const selectedNode = computed(() => businessNodes.value.find(n => n.key === selectedNodeKey.value) || null)
+const hasStart = computed(() => businessNodes.value.some(n => n.elementType === 'START'))
+const hasEnd = computed(() => businessNodes.value.some(n => n.elementType === 'END'))
+const otherNodes = computed(() => businessNodes.value.filter(n => n.key !== selectedNodeKey.value))
 
 watch(selectedNode, (node) => {
   if (node?.elementType === 'METHOD' && node.method?.suiteCode && node.method?.methodCode) {
@@ -571,6 +564,165 @@ watch(selectedNode, (node) => {
   }
 })
 
+// ====== VueFlow 事件 ======
+function onVfNodeClick(evt: NodeMouseEvent) {
+  selectNodeByKey(evt.node.data.nodeKey)
+}
+function onVfEdgeClick(_evt: EdgeMouseEvent) {
+  // 点击边时可以删除（预留）
+}
+function onVfConnect(params: Connection) {
+  const srcKey = vfNodes.value.find((n: any) => n.id === params.source)?.data?.nodeKey
+  const tgtKey = vfNodes.value.find((n: any) => n.id === params.target)?.data?.nodeKey
+  if (!srcKey || !tgtKey) return
+
+  // 更新业务节点的 outgoings/incomings
+  const srcNode = businessNodes.value.find(n => n.key === srcKey)
+  const tgtNode = businessNodes.value.find(n => n.key === tgtKey)
+  if (!srcNode || !tgtNode) return
+
+  if (!srcNode.outgoings) srcNode.outgoings = []
+  if (!tgtNode.incomings) tgtNode.incomings = []
+  if (!srcNode.outgoings.includes(tgtKey)) srcNode.outgoings.push(tgtKey)
+  if (!tgtNode.incomings.includes(srcKey)) tgtNode.incomings.push(srcKey)
+
+  // 如果源节点是CONDITION，自动填入第一个没有outgoing的分支
+  if (srcNode.elementType === 'CONDITION' && srcNode.conditions) {
+    const emptyCond = srcNode.conditions.find((c: any) => !c.outgoing)
+    if (emptyCond) emptyCond.outgoing = tgtKey
+  }
+
+  // 添加边到VueFlow
+  const edgeId = `e-${params.source}-${params.target}`
+  if (!vfEdges.value.find(e => e.id === edgeId)) {
+    vfEdges.value.push({
+      id: edgeId,
+      source: params.source,
+      target: params.target,
+      animated: true,
+      style: { stroke: '#1890ff', strokeWidth: 2 },
+      markerEnd: { type: 'arrowclosed', color: '#1890ff' }
+    })
+  }
+}
+function onVfEdgeUpdate(_evt: { edge: any; connection: any }) {
+  // 边更新（预留）
+}
+
+function selectNodeByKey(key: string) {
+  selectedNodeKey.value = key
+}
+
+// ====== 业务节点 → VueFlow 节点转换 ======
+function buildVfNode(bNode: any, x: number, y: number) {
+  return {
+    id: bNode.key,
+    type: 'juggle',
+    position: { x: bNode._x ?? x, y: bNode._y ?? y },
+    data: {
+      nodeKey: bNode.key,
+      elementType: bNode.elementType,
+      label: bNode.label || ''
+    },
+    draggable: true
+  }
+}
+
+function buildVfEdge(srcKey: string, tgtKey: string) {
+  return {
+    id: `e-${srcKey}-${tgtKey}`,
+    source: srcKey,
+    target: tgtKey,
+    animated: true,
+    style: { stroke: '#1890ff', strokeWidth: 2 },
+    markerEnd: { type: 'arrowclosed', color: '#1890ff' }
+  }
+}
+
+// 将业务节点数组同步到VueFlow
+function syncBusinessNodesToVf() {
+  // 计算布局（如果没有保存位置）
+  const cols = 1
+  const xBase = 100
+  const yBase = 60
+  const xGap = 200
+  const yGap = 120
+
+  const newVfNodes: any[] = []
+  const newVfEdges: any[] = []
+  const edgeSet = new Set<string>()
+
+  businessNodes.value.forEach((bNode, idx) => {
+    const x = bNode._x ?? xBase + (idx % cols) * xGap
+    const y = bNode._y ?? yBase + idx * yGap
+    newVfNodes.push(buildVfNode(bNode, x, y))
+  })
+
+  // 从 outgoings 构建边
+  businessNodes.value.forEach(bNode => {
+    const outs: string[] = bNode.outgoings || []
+    outs.forEach((tgt: string) => {
+      const eid = `e-${bNode.key}-${tgt}`
+      if (!edgeSet.has(eid)) {
+        edgeSet.add(eid)
+        newVfEdges.push(buildVfEdge(bNode.key, tgt))
+      }
+    })
+    // CONDITION 分支也要建边
+    if (bNode.elementType === 'CONDITION' && bNode.conditions) {
+      bNode.conditions.forEach((c: any) => {
+        if (c.outgoing) {
+          const eid = `e-${bNode.key}-${c.outgoing}`
+          if (!edgeSet.has(eid)) {
+            edgeSet.add(eid)
+            newVfEdges.push({
+              ...buildVfEdge(bNode.key, c.outgoing),
+              label: c.conditionName || '',
+              style: { stroke: '#fa8c16', strokeWidth: 2, strokeDasharray: '5,3' },
+              labelStyle: { fill: '#fa8c16', fontWeight: 600, fontSize: 11 },
+              markerEnd: { type: 'arrowclosed', color: '#fa8c16' }
+            })
+          }
+        }
+      })
+    }
+  })
+
+  vfNodes.value = newVfNodes
+  vfEdges.value = newVfEdges
+}
+
+// 从VueFlow节点位置反同步回业务节点
+function syncVfPositionsToBusinessNodes() {
+  vfNodes.value.forEach(vfn => {
+    const bNode = businessNodes.value.find(n => n.key === vfn.id)
+    if (bNode) {
+      bNode._x = vfn.position.x
+      bNode._y = vfn.position.y
+    }
+  })
+}
+
+// 同步标签到VueFlow节点data
+function syncVfNodeLabel(bNode: any) {
+  const vfn = vfNodes.value.find(n => n.id === bNode.key)
+  if (vfn) vfn.data = { ...vfn.data, label: bNode.label }
+}
+
+// ====== 自动布局（自动排成整齐竖排） ======
+function autoLayout() {
+  const xBase = 200
+  const yBase = 60
+  const yGap = 130
+  businessNodes.value.forEach((bNode, idx) => {
+    bNode._x = xBase
+    bNode._y = yBase + idx * yGap
+  })
+  syncBusinessNodesToVf()
+  ElMessage.success('已自动布局')
+}
+
+// ====== 数据加载 ======
 onMounted(async () => {
   await Promise.all([loadFlowInfo(), loadSuiteApis(), loadDataSources()])
 })
@@ -581,12 +733,13 @@ async function loadFlowInfo() {
     const def = res.data?.definition || res.data
     flowInfo.value = def
     if (def?.flowContent && def.flowContent !== '[]') {
-      try { nodes.value = JSON.parse(def.flowContent) } catch { nodes.value = [] }
+      try {
+        businessNodes.value = JSON.parse(def.flowContent)
+      } catch { businessNodes.value = [] }
     }
     allVariables.value = res.data?.variables || []
     flowInputParams.value = res.data?.inputParams || []
     flowOutputParams.value = res.data?.outputParams || []
-    // 同步调试参数默认值（用入参的 paramCode）
     if (flowInputParams.value.length > 0) {
       const defaultObj: Record<string, any> = {}
       for (const p of flowInputParams.value) {
@@ -594,6 +747,9 @@ async function loadFlowInfo() {
       }
       debugParams.value = JSON.stringify(defaultObj, null, 2)
     }
+    // 同步到 VueFlow
+    await nextTick()
+    syncBusinessNodesToVf()
   } catch (e) {
     console.error('loadFlowInfo', e)
   }
@@ -630,6 +786,7 @@ async function loadDataSources() {
   } catch {}
 }
 
+// ====== 节点操作 ======
 function nodeIcon(type: string) {
   const map: Record<string, string> = {
     START: '▶', END: '⏹', METHOD: '⚙', CONDITION: '◆',
@@ -646,48 +803,52 @@ function nodeTypeName(type: string) {
   return map[type] || type
 }
 
-function getNodeLabel(node: any) {
-  if (node.label) return node.label
-  if (node.elementType === 'METHOD') return node.method?.methodCode || node.key
-  if (node.elementType === 'MYSQL') return node.mysqlConfig?.dataSourceName || node.key
-  return node.key
-}
-
 function addNode(type: string) {
   const key = `${type.toLowerCase()}_${Date.now()}`
-  const node: any = { key, elementType: type, incomings: [], outgoings: [], label: '' }
+  // 新节点放在最后一个节点右边，或默认位置
+  const lastVfNode = vfNodes.value[vfNodes.value.length - 1]
+  const x = lastVfNode ? lastVfNode.position.x + 220 : 200
+  const y = lastVfNode ? lastVfNode.position.y : 200
+
+  const bNode: any = { key, elementType: type, incomings: [], outgoings: [], label: '', _x: x, _y: y }
   if (type === 'METHOD') {
-    node.method = {
+    bNode.method = {
       suiteCode: '', methodCode: '', url: '', requestType: 'GET', contentType: 'JSON',
       inputFillRules: [], outputFillRules: [], headerFillRules: []
     }
   }
   if (type === 'CONDITION') {
-    node.conditions = [
+    bNode.conditions = [
       { conditionName: '分支1', conditionType: 'CUSTOM', expression: '', outgoing: '' },
       { conditionName: '默认', conditionType: 'DEFAULT', expression: '', outgoing: '' }
     ]
   }
-  if (type === 'ASSIGN') node.assignRules = []
-  if (type === 'CODE') node.codeConfig = { scriptType: 'javascript', script: '' }
-  if (type === 'MYSQL') node.mysqlConfig = { dataSourceName: '', dataSourceType: '', sql: '', operationType: 'QUERY', outputVariable: '', affectedRowsVariable: '' }
-  nodes.value.push(node)
-  selectNode(node)
+  if (type === 'ASSIGN') bNode.assignRules = []
+  if (type === 'CODE') bNode.codeConfig = { scriptType: 'javascript', script: '' }
+  if (type === 'MYSQL') bNode.mysqlConfig = {
+    dataSourceName: '', dataSourceType: '', sql: '', operationType: 'QUERY',
+    outputVariable: '', affectedRowsVariable: ''
+  }
+
+  businessNodes.value.push(bNode)
+
+  // 同步到VueFlow
+  vfNodes.value.push(buildVfNode(bNode, x, y))
+
+  selectNodeByKey(key)
 }
 
 function removeNode(key: string) {
-  nodes.value = nodes.value.filter(n => n.key !== key)
+  businessNodes.value = businessNodes.value.filter(n => n.key !== key)
   if (selectedNodeKey.value === key) selectedNodeKey.value = null
-  nodes.value.forEach(n => {
+  businessNodes.value.forEach(n => {
     n.outgoings = (n.outgoings || []).filter((k: string) => k !== key)
+    n.incomings = (n.incomings || []).filter((k: string) => k !== key)
     if (n.conditions) n.conditions.forEach((c: any) => { if (c.outgoing === key) c.outgoing = '' })
   })
-}
-
-function selectNode(node: any) { selectedNodeKey.value = node.key }
-
-function onOutgoingChange(val: string) {
-  if (selectedNode.value) selectedNode.value.outgoings = val ? [val] : []
+  // 同步到VueFlow
+  vfNodes.value = vfNodes.value.filter(n => n.id !== key)
+  vfEdges.value = vfEdges.value.filter(e => e.source !== key && e.target !== key)
 }
 
 function onApiSelect(val: any[]) {
@@ -749,7 +910,6 @@ async function saveFlowParams(type: 'input' | 'output') {
   }
   await request.post('/parameter/save', payload)
   ElMessage.success(`${type === 'input' ? '入参' : '出参'}保存成功`)
-  // 同步变量列表
   await loadFlowInfo()
 }
 
@@ -781,10 +941,32 @@ async function saveVariables() {
 function varTypeName(type: string) { return { INPUT: '输入', OUTPUT: '输出', VARIABLE: '中间' }[type] || type }
 function varTypeColor(type: string) { return { INPUT: 'success', OUTPUT: 'warning', VARIABLE: 'info' }[type] || '' }
 
+// ====== 保存/部署/调试 ======
 async function saveFlow() {
   if (!flowInfo.value?.id) return ElMessage.error('流程信息未加载')
-  await request.put('/flow/definition/save', { id: flowInfo.value.id, flowContent: JSON.stringify(nodes.value) })
+  // 保存前先把VueFlow位置同步回业务节点
+  syncVfPositionsToBusinessNodes()
+  // 把VueFlow的边同步回业务节点的 outgoings/incomings
+  syncVfEdgesToBusinessNodes()
+  // 序列化业务节点（去掉 _x _y 字段可选保留，此处保留以便下次还原位置）
+  await request.put('/flow/definition/save', { id: flowInfo.value.id, flowContent: JSON.stringify(businessNodes.value) })
   ElMessage.success('保存成功')
+}
+
+function syncVfEdgesToBusinessNodes() {
+  // 重置所有节点的 outgoings/incomings
+  businessNodes.value.forEach(n => { n.outgoings = []; n.incomings = [] })
+  // 从VueFlow边重建
+  vfEdges.value.forEach(edge => {
+    const srcKey = edge.source
+    const tgtKey = edge.target
+    const srcNode = businessNodes.value.find(n => n.key === srcKey)
+    const tgtNode = businessNodes.value.find(n => n.key === tgtKey)
+    if (srcNode && !srcNode.outgoings.includes(tgtKey)) srcNode.outgoings.push(tgtKey)
+    if (tgtNode && !tgtNode.incomings.includes(srcKey)) tgtNode.incomings.push(srcKey)
+  })
+  // CONDITION分支的 outgoing 保持在conditions里，不需要额外处理
+  // （outgoings已在onVfConnect里同步了）
 }
 
 async function deployFlow() {
@@ -844,14 +1026,39 @@ async function runDebug() {
 
 .designer-body { flex: 1; display: flex; overflow: hidden; }
 
-.left-panel, .right-panel {
-  width: 260px;
+/* 中间画布 */
+.canvas-area {
+  flex: 1;
+  position: relative;
+  background: #f0f2f5;
+  overflow: hidden;
+}
+
+.vf-canvas {
+  width: 100%;
+  height: 100%;
+}
+
+.flow-hint {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -60%);
+  text-align: center;
+  color: #aaa;
+  pointer-events: none;
+  z-index: 10;
+}
+.flow-hint p { font-size: 14px; margin-top: 8px; }
+
+/* 右侧属性面板 */
+.right-panel {
+  width: 340px;
   background: #fff;
-  border-right: 1px solid #eee;
+  border-left: 1px solid #eee;
   overflow-y: auto;
   flex-shrink: 0;
 }
-.right-panel { border-right: none; border-left: 1px solid #eee; width: 310px; }
 
 .panel-title {
   font-size: 13px; font-weight: 600; color: #333;
@@ -860,79 +1067,6 @@ async function runDebug() {
   position: sticky; top: 0; z-index: 1;
 }
 
-.node-item {
-  display: flex; align-items: center; gap: 8px;
-  padding: 8px 12px; cursor: pointer;
-  border-bottom: 1px solid #f0f0f0; transition: background 0.15s;
-}
-.node-item:hover { background: #f5f7ff; }
-.node-item.node-selected { background: #e6f4ff; border-left: 3px solid #1890ff; }
-
-.node-icon-badge {
-  width: 30px; height: 30px; border-radius: 6px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 14px; color: #fff; flex-shrink: 0;
-}
-.badge-start     { background: #52c41a; }
-.badge-end       { background: #ff4d4f; }
-.badge-method    { background: #1890ff; }
-.badge-assign    { background: #722ed1; }
-.badge-code      { background: #eb2f96; font-size: 11px; }
-.badge-mysql     { background: #13c2c2; }
-.badge-condition { background: #fa8c16; }
-.badge-merge     { background: #7c3aed; }
-
-.node-info { flex: 1; min-width: 0; }
-.node-type-label { font-size: 12px; font-weight: 600; color: #333; }
-.node-key-label  { font-size: 11px; color: #999; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-/* 中间画布 */
-.canvas-area {
-  flex: 1; overflow-y: auto; background: #f5f7fa;
-  display: flex; align-items: flex-start; justify-content: center; padding: 24px 0;
-}
-.flow-hint { text-align: center; color: #aaa; padding-top: 80px; font-size: 15px; }
-.flow-chart { display: flex; flex-direction: column; align-items: center; gap: 0; min-width: 320px; }
-.flow-node-wrap { display: flex; flex-direction: column; align-items: center; }
-
-.flow-node {
-  width: 160px; min-height: 64px; border-radius: 10px;
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  cursor: pointer; transition: all 0.15s; border: 2px solid transparent;
-  padding: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-  background: #fff;
-}
-.flow-node:hover { transform: scale(1.03); }
-.flow-node.fn-selected { border-color: #1890ff !important; box-shadow: 0 0 0 3px rgba(24,144,255,0.2); }
-.fn-icon { font-size: 20px; margin-bottom: 4px; }
-.fn-name { font-size: 12px; font-weight: 600; color: #333; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.fn-type { font-size: 11px; color: #999; }
-.fn-arrow { font-size: 20px; color: #bbb; margin: 2px 0; }
-
-.fn-start     { background: linear-gradient(135deg, #f6ffed, #d9f7be); border-color: #52c41a; }
-.fn-end       { background: linear-gradient(135deg, #fff1f0, #ffccc7); border-color: #ff4d4f; }
-.fn-method    { background: linear-gradient(135deg, #e6f4ff, #bae0ff); border-color: #1890ff; }
-.fn-assign    { background: linear-gradient(135deg, #f9f0ff, #d3adf7); border-color: #722ed1; }
-.fn-code      { background: linear-gradient(135deg, #fff0f6, #ffadd2); border-color: #eb2f96; }
-.fn-mysql     { background: linear-gradient(135deg, #e6fffb, #b5f5ec); border-color: #13c2c2; }
-.fn-condition { background: linear-gradient(135deg, #fff7e6, #ffd591); border-color: #fa8c16; }
-.fn-merge     { background: linear-gradient(135deg, #f5f0ff, #c4b5fd); border-color: #7c3aed; }
-
-/* 条件分支展示 */
-.condition-branches {
-  display: flex; flex-direction: column; gap: 4px;
-  background: #fffbe6; border: 1px dashed #fa8c16;
-  border-radius: 8px; padding: 8px 12px; margin: 4px 0;
-  min-width: 200px;
-}
-.branch-line { display: flex; align-items: center; gap: 6px; font-size: 12px; }
-.branch-arrow { color: #fa8c16; font-weight: bold; }
-.branch-label { padding: 2px 6px; border-radius: 4px; font-size: 11px; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.branch-custom { background: #fff0f0; color: #cf1322; }
-.branch-default { background: #e6fffb; color: #08979c; }
-.branch-target { color: #1890ff; font-size: 11px; }
-
-/* 右侧属性面板 */
 .prop-content { padding: 12px; }
 .prop-item { margin-bottom: 12px; }
 .prop-item label { display: block; font-size: 12px; color: #666; margin-bottom: 4px; font-weight: 500; }
@@ -943,6 +1077,7 @@ async function runDebug() {
   margin: 12px 0 6px; padding-bottom: 4px; border-bottom: 1px solid #eee;
   display: flex; align-items: center;
 }
+
 .type-dot-start { color: #52c41a; }
 .type-dot-end { color: #ff4d4f; }
 .type-dot-method { color: #1890ff; }
@@ -952,7 +1087,6 @@ async function runDebug() {
 .type-dot-condition { color: #fa8c16; }
 .type-dot-merge { color: #7c3aed; }
 
-/* 填充规则行 */
 .fill-rule-row {
   display: flex; align-items: center; gap: 4px;
   margin-bottom: 6px; padding: 6px; background: #fafafa;
@@ -960,13 +1094,69 @@ async function runDebug() {
 }
 .arrow-icon { color: #1890ff; font-weight: bold; flex-shrink: 0; }
 
-/* 赋值规则 */
 .assign-rule { background: #fafafa; border: 1px solid #f0f0f0; border-radius: 6px; padding: 6px; margin-bottom: 8px; }
 .assign-row { display: flex; align-items: center; gap: 4px; }
 
-/* 条件分支属性 */
 .condition-item { background: #fffbe6; border: 1px solid #ffe58f; border-radius: 6px; padding: 8px; margin-bottom: 8px; }
 
-/* 代码编辑器 */
 .code-editor :deep(textarea) { font-family: 'Consolas', 'Monaco', monospace !important; font-size: 12px !important; line-height: 1.6; background: #1e1e1e !important; color: #d4d4d4 !important; }
+</style>
+
+<!-- 自定义节点全局样式（非scoped） -->
+<style>
+/* VueFlow 自定义节点 jg-node */
+.jg-node {
+  width: 140px;
+  min-height: 64px;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border: 2px solid transparent;
+  padding: 8px 12px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.12);
+  background: #fff;
+  position: relative;
+  transition: box-shadow 0.15s, border-color 0.15s;
+  user-select: none;
+}
+.jg-node:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.2); }
+.jg-node.jg-selected { border-color: #1890ff !important; box-shadow: 0 0 0 3px rgba(24,144,255,0.25); }
+
+.jg-icon { font-size: 20px; margin-bottom: 4px; }
+.jg-name { font-size: 12px; font-weight: 600; color: #333; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; }
+.jg-type { font-size: 11px; color: #999; }
+
+.jg-start     { background: linear-gradient(135deg, #f6ffed, #d9f7be); border-color: #52c41a; }
+.jg-end       { background: linear-gradient(135deg, #fff1f0, #ffccc7); border-color: #ff4d4f; }
+.jg-method    { background: linear-gradient(135deg, #e6f4ff, #bae0ff); border-color: #1890ff; }
+.jg-assign    { background: linear-gradient(135deg, #f9f0ff, #d3adf7); border-color: #722ed1; }
+.jg-code      { background: linear-gradient(135deg, #fff0f6, #ffadd2); border-color: #eb2f96; }
+.jg-mysql     { background: linear-gradient(135deg, #e6fffb, #b5f5ec); border-color: #13c2c2; }
+.jg-condition { background: linear-gradient(135deg, #fff7e6, #ffd591); border-color: #fa8c16; }
+.jg-merge     { background: linear-gradient(135deg, #f5f0ff, #c4b5fd); border-color: #7c3aed; }
+
+/* Handle 连接点样式 */
+.jg-handle {
+  width: 10px !important;
+  height: 10px !important;
+  background: #1890ff !important;
+  border: 2px solid #fff !important;
+  border-radius: 50% !important;
+}
+.jg-handle-top  { top: -6px !important; }
+.jg-handle-bottom { bottom: -6px !important; }
+
+/* VueFlow 画布背景 */
+.vue-flow__background { background: #f0f2f5; }
+
+/* 覆盖 VueFlow 控件颜色 */
+.vue-flow__controls-button {
+  background: #fff;
+  border: 1px solid #ddd;
+  color: #333;
+}
+.vue-flow__controls-button:hover { background: #e6f4ff; }
 </style>
