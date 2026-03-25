@@ -1,3 +1,4 @@
+using JuggleNet6.Backend.Domain.Engine.NodeExecutors;
 using JuggleNet6.Backend.Domain.Entities;
 using JuggleNet6.Backend.Infrastructure.Persistence;
 using JuggleNet6.Backend.Models.Request;
@@ -71,6 +72,26 @@ public class DataSourceController : ControllerBase
             .Select(d => new { dataSourceName = d.DsName, dataSourceType = d.DsType, id = d.Id })
             .ToListAsync();
         return ApiResult.Success(list);
+    }
+
+    /// <summary>测试数据源连接</summary>
+    [HttpPost("test/{id}")]
+    public async Task<ApiResult> Test(long id)
+    {
+        var ds = await _db.DataSources.FindAsync(id);
+        if (ds == null) return ApiResult.Fail("数据源不存在");
+        var dsType = (ds.DsType ?? "sqlite").ToLower();
+        string connStr = dsType switch
+        {
+            "sqlite"       => $"Data Source={(string.IsNullOrEmpty(ds.DbName) ? "juggle.db" : ds.DbName)}",
+            "mysql"        => $"Server={ds.Host};Port={ds.Port};Database={ds.DbName};User={ds.Username};Password={ds.Password};CharSet=utf8mb4;",
+            "postgresql" or "postgres" => $"Host={ds.Host};Port={ds.Port};Database={ds.DbName};Username={ds.Username};Password={ds.Password};",
+            "sqlserver" or "mssql"     => $"Server={ds.Host},{ds.Port};Database={ds.DbName};User Id={ds.Username};Password={ds.Password};TrustServerCertificate=True;",
+            _ => $"Data Source={(string.IsNullOrEmpty(ds.DbName) ? "juggle.db" : ds.DbName)}"
+        };
+        var dsInfo = new DataSourceInfo { DsType = dsType, ConnStr = connStr, DsName = ds.DsName ?? "" };
+        var (ok, msg) = await MysqlNodeExecutor.TestConnectionAsync(dsInfo);
+        return ok ? ApiResult.Success(msg) : ApiResult.Fail(msg);
     }
 
     [HttpPost("page")]

@@ -1,49 +1,52 @@
+using System.Data;
+using System.Data.Common;
 using System.Text.RegularExpressions;
 using Microsoft.Data.Sqlite;
+using MySqlConnector;
+using Npgsql;
+using Microsoft.Data.SqlClient;
 
 namespace JuggleNet6.Backend.Domain.Engine.NodeExecutors;
 
 /// <summary>
-/// MYSQL 节点执行器：执行 SQL 语句（使用数据源配置的数据库连接）
-/// 当前支持 SQLite 和 MySQL（需要 MySql.Data 包，未引入时降级为 SQLite）
+/// 数据库节点执行器：执行 SQL 语句（使用数据源配置的数据库连接）
+/// 支持：SQLite / MySQL / PostgreSQL / SQL Server
 /// 变量使用 Freemarker 风格模板：${varName}
 /// </summary>
 public class MysqlNodeExecutor : INodeExecutor
 {
-    private readonly Dictionary<string, string> _connectionStrings;
+    private readonly Dictionary<string, DataSourceInfo> _dataSources;
 
-    public MysqlNodeExecutor(Dictionary<string, string> connectionStrings)
+    public MysqlNodeExecutor(Dictionary<string, DataSourceInfo> dataSources)
     {
-        _connectionStrings = connectionStrings;
+        _dataSources = dataSources;
     }
 
     public async Task<string?> ExecuteAsync(FlowNode node, FlowContext context)
     {
         var cfg = node.MysqlConfig;
         if (cfg == null)
-            throw new InvalidOperationException($"MYSQL node [{node.Key}] has no mysql config.");
+            throw new InvalidOperationException($"数据库节点 [{node.Key}] 未配置 mysqlConfig。");
 
         // 渲染 SQL（替换模板变量 ${varName}）
         var sql = RenderTemplate(cfg.Sql, context);
 
-        // 获取连接字符串
-        if (!_connectionStrings.TryGetValue(cfg.DataSourceName, out var connStr))
+        // 获取数据源信息
+        if (!_dataSources.TryGetValue(cfg.DataSourceName, out var dsInfo))
             throw new InvalidOperationException($"数据源 [{cfg.DataSourceName}] 未找到，请先在系统设置中配置数据源。");
 
         // 执行 SQL
         if (cfg.OperationType == "QUERY")
         {
-            var results = await ExecuteQueryAsync(connStr, sql, cfg.DataSourceType);
-            // 将查询结果写入目标变量
+            var results = await ExecuteQueryAsync(dsInfo, sql);
             if (!string.IsNullOrEmpty(cfg.OutputVariable))
-            {
                 context.SetVariable(cfg.OutputVariable, results);
-            }
         }
         else
         {
-            // INSERT / UPDATE / DELETE（更改操作，不关心结果）
-            await ExecuteNonQueryAsync(connStr, sql, cfg.DataSourceType);
+            var affected = await ExecuteNonQueryAsync(dsInfo, sql);
+            if (!string.IsNullOrEmpty(cfg.AffectedRowsVariable))
+                context.SetVariable(cfg.AffectedRowsVariable, affected);
         }
 
         return node.Outgoings.FirstOrDefault();
@@ -59,17 +62,14 @@ public class MysqlNodeExecutor : INodeExecutor
         });
     }
 
-    private static async Task<List<Dictionary<string, object?>>> ExecuteQueryAsync(
-        string connStr, string sql, string? dsType)
+    private static async Task<List<Dictionary<string, object?>>> ExecuteQueryAsync(DataSourceInfo dsInfo, string sql)
     {
         var results = new List<Dictionary<string, object?>>();
-
-        // 默认使用 SQLite（生产场景可扩展 MySQL 连接）
-        using var conn = new SqliteConnection(connStr);
+        await using var conn = CreateConnection(dsInfo);
         await conn.OpenAsync();
-        using var cmd = conn.CreateCommand();
+        await using var cmd = conn.CreateCommand();
         cmd.CommandText = sql;
-        using var reader = await cmd.ExecuteReaderAsync();
+        await using var reader = await cmd.ExecuteReaderAsync();
         while (await reader.ReadAsync())
         {
             var row = new Dictionary<string, object?>();
@@ -77,16 +77,51 @@ public class MysqlNodeExecutor : INodeExecutor
                 row[reader.GetName(i)] = reader.IsDBNull(i) ? null : reader.GetValue(i);
             results.Add(row);
         }
-
         return results;
     }
 
-    private static async Task ExecuteNonQueryAsync(string connStr, string sql, string? dsType)
+    private static async Task<int> ExecuteNonQueryAsync(DataSourceInfo dsInfo, string sql)
     {
-        using var conn = new SqliteConnection(connStr);
+        await using var conn = CreateConnection(dsInfo);
         await conn.OpenAsync();
-        using var cmd = conn.CreateCommand();
+        await using var cmd = conn.CreateCommand();
         cmd.CommandText = sql;
-        await cmd.ExecuteNonQueryAsync();
+        return await cmd.ExecuteNonQueryAsync();
     }
+
+    /// <summary>根据数据源类型创建对应的数据库连接</summary>
+    public static DbConnection CreateConnection(DataSourceInfo dsInfo)
+    {
+        return dsInfo.DsType.ToLower() switch
+        {
+            "sqlite"      => new SqliteConnection(dsInfo.ConnStr),
+            "mysql"       => new MySqlConnection(dsInfo.ConnStr),
+            "postgresql" or "postgres" => new NpgsqlConnection(dsInfo.ConnStr),
+            "sqlserver" or "mssql"     => new SqlConnection(dsInfo.ConnStr),
+            _ => throw new InvalidOperationException($"不支持的数据库类型: {dsInfo.DsType}")
+        };
+    }
+
+    /// <summary>测试连接是否可用</summary>
+    public static async Task<(bool Ok, string Message)> TestConnectionAsync(DataSourceInfo dsInfo)
+    {
+        try
+        {
+            await using var conn = CreateConnection(dsInfo);
+            await conn.OpenAsync();
+            return (true, "连接成功");
+        }
+        catch (Exception ex)
+        {
+            return (false, ex.Message);
+        }
+    }
+}
+
+/// <summary>数据源信息（用于节点执行器）</summary>
+public class DataSourceInfo
+{
+    public string DsType { get; set; } = "sqlite";
+    public string ConnStr { get; set; } = "";
+    public string DsName { get; set; } = "";
 }

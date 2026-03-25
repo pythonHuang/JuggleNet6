@@ -35,7 +35,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox, ElInputNumber } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '../../utils/request'
 
 const route = useRoute()

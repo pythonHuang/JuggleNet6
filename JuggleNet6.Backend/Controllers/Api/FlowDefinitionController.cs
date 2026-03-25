@@ -1,5 +1,6 @@
 using JuggleNet6.Backend.Domain.Entities;
 using JuggleNet6.Backend.Domain.Engine;
+using JuggleNet6.Backend.Domain.Engine.NodeExecutors;
 using JuggleNet6.Backend.Infrastructure.Persistence;
 using JuggleNet6.Backend.Models.Request;
 using JuggleNet6.Backend.Models.Response;
@@ -141,36 +142,33 @@ public class FlowDefinitionController : ControllerBase
         if (string.IsNullOrEmpty(entity.FlowContent) || entity.FlowContent == "[]")
             return ApiResult.Fail("流程内容为空，请先设计流程");
 
-        // 加载数据源连接字符串（供 MYSQL 节点使用）
-        var dsConnStrings = await BuildDataSourceConnStrings();
-        var engine = new FlowEngine(httpClientFactory, dsConnStrings);
+        // 加载数据源信息（供 DB 节点使用）
+        var dsInfos = await BuildDataSourceInfos();
+        var engine = new FlowEngine(httpClientFactory, dsInfos);
         var result = await engine.ExecuteAsync(entity.FlowContent, req.Params, flowKey, "debug");
         return result.Success
             ? ApiResult.Success(result.OutputData)
             : ApiResult.Fail(result.ErrorMessage ?? "执行失败");
     }
 
-    /// <summary>构建数据源名称→连接字符串映射</summary>
-    private async Task<Dictionary<string, string>> BuildDataSourceConnStrings()
+    /// <summary>构建数据源名称 → DataSourceInfo 映射</summary>
+    private async Task<Dictionary<string, DataSourceInfo>> BuildDataSourceInfos()
     {
         var dataSources = await _db.DataSources.Where(d => d.Deleted == 0).ToListAsync();
-        var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var map = new Dictionary<string, DataSourceInfo>(StringComparer.OrdinalIgnoreCase);
         foreach (var ds in dataSources)
         {
             if (string.IsNullOrEmpty(ds.DsName)) continue;
-            string connStr;
-            if (string.Equals(ds.DsType, "sqlite", StringComparison.OrdinalIgnoreCase) || string.IsNullOrEmpty(ds.Host))
+            var dsType = (ds.DsType ?? "sqlite").ToLower();
+            string connStr = dsType switch
             {
-                // SQLite：DbName 当作文件路径
-                var dbPath = string.IsNullOrEmpty(ds.DbName) ? "juggle.db" : ds.DbName;
-                connStr = $"Data Source={dbPath}";
-            }
-            else
-            {
-                // MySQL
-                connStr = $"Server={ds.Host};Port={ds.Port};Database={ds.DbName};User={ds.Username};Password={ds.Password};";
-            }
-            map[ds.DsName] = connStr;
+                "sqlite" => $"Data Source={(string.IsNullOrEmpty(ds.DbName) ? "juggle.db" : ds.DbName)}",
+                "mysql"  => $"Server={ds.Host};Port={ds.Port};Database={ds.DbName};User={ds.Username};Password={ds.Password};CharSet=utf8mb4;",
+                "postgresql" or "postgres" => $"Host={ds.Host};Port={ds.Port};Database={ds.DbName};Username={ds.Username};Password={ds.Password};",
+                "sqlserver" or "mssql"     => $"Server={ds.Host},{ds.Port};Database={ds.DbName};User Id={ds.Username};Password={ds.Password};TrustServerCertificate=True;",
+                _ => $"Data Source={(string.IsNullOrEmpty(ds.DbName) ? "juggle.db" : ds.DbName)}"
+            };
+            map[ds.DsName] = new DataSourceInfo { DsType = dsType, ConnStr = connStr, DsName = ds.DsName };
         }
         return map;
     }

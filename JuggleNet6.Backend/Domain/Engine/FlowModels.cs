@@ -9,7 +9,10 @@ public class FlowNode
     public string Key { get; set; } = "";
 
     [JsonPropertyName("elementType")]
-    public string ElementType { get; set; } = "";  // START END METHOD CONDITION ASSIGN CODE MYSQL
+    public string ElementType { get; set; } = "";  // START END METHOD CONDITION ASSIGN CODE MYSQL(DB) MERGE
+
+    [JsonPropertyName("label")]
+    public string? Label { get; set; }
 
     [JsonPropertyName("incomings")]
     public List<string> Incomings { get; set; } = new();
@@ -151,4 +154,8 @@ public class MysqlConfig
     /// <summary>查询结果写入的变量名（QUERY 类型有效）</summary>
     [JsonPropertyName("outputVariable")]
     public string? OutputVariable { get; set; }
+
+    /// <summary>影响行数写入的变量名（UPDATE/INSERT/DELETE 类型有效）</summary>
+    [JsonPropertyName("affectedRowsVariable")]
+    public string? AffectedRowsVariable { get; set; }
 }
