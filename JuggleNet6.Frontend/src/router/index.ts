@@ -15,6 +15,7 @@ const routes = [
       { path: 'flow/version/:flowKey', component: () => import('../views/flow/FlowVersionList.vue') },
       { path: 'suite/list',  component: () => import('../views/suite/SuiteList.vue') },
       { path: 'suite/api/:suiteCode/:suiteId', component: () => import('../views/suite/ApiList.vue') },
+      { path: 'suite/api/:suiteCode/:apiId/detail', component: () => import('../views/suite/ApiDetail.vue') },
       { path: 'object/list', component: () => import('../views/object/ObjectList.vue') },
       { path: 'system/token',      component: () => import('../views/system/TokenList.vue') },
       { path: 'system/datasource', component: () => import('../views/system/DataSourceList.vue') }

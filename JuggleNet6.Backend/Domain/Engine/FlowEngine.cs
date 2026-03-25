@@ -5,14 +5,19 @@ namespace JuggleNet6.Backend.Domain.Engine;
 
 /// <summary>
 /// 流程执行引擎：解析流程 JSON，按节点拓扑顺序执行，维护变量上下文
+/// 支持节点类型：START / END / METHOD / CONDITION / ASSIGN / CODE / MYSQL
 /// </summary>
 public class FlowEngine
 {
     private readonly IHttpClientFactory _httpClientFactory;
+    /// <summary>数据源名称 → 连接字符串映射（由 FlowDefinitionController 注入）</summary>
+    private readonly Dictionary<string, string> _dataSourceConnStrings;
 
-    public FlowEngine(IHttpClientFactory httpClientFactory)
+    public FlowEngine(IHttpClientFactory httpClientFactory,
+                      Dictionary<string, string>? dataSourceConnStrings = null)
     {
         _httpClientFactory = httpClientFactory;
+        _dataSourceConnStrings = dataSourceConnStrings ?? new();
     }
 
     public async Task<FlowResult> ExecuteAsync(
@@ -66,7 +71,7 @@ public class FlowEngine
                 if (!nodeMap.TryGetValue(currentKey, out var currentNode))
                     break;
 
-                // 检测死循环
+                // 检测死循环（CONDITION 节点不计入 visited）
                 if (currentNode.ElementType != "CONDITION" && !visited.Add(currentKey))
                     return new FlowResult { Success = false, ErrorMessage = $"检测到死循环，节点: {currentKey}" };
 
@@ -76,6 +81,9 @@ public class FlowEngine
                     "END"       => new EndNodeExecutor(),
                     "METHOD"    => new MethodNodeExecutor(_httpClientFactory),
                     "CONDITION" => new ConditionNodeExecutor(),
+                    "ASSIGN"    => new AssignNodeExecutor(),
+                    "CODE"      => new CodeNodeExecutor(),
+                    "MYSQL"     => new MysqlNodeExecutor(_dataSourceConnStrings),
                     _ => throw new InvalidOperationException($"未知节点类型: {currentNode.ElementType}")
                 };
 
@@ -92,7 +100,7 @@ public class FlowEngine
             return new FlowResult { Success = false, ErrorMessage = ex.Message };
         }
 
-        // 6. 收集输出变量（以 output_ 开头的变量）
+        // 6. 收集所有输出变量（以 output_ 开头的变量）
         foreach (var kv in context.Variables)
         {
             if (kv.Key.StartsWith("output_"))
