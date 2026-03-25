@@ -132,7 +132,8 @@ public class FlowDefinitionController : ControllerBase
 
     /// <summary>调试流程</summary>
     [HttpPost("debug/{flowKey}")]
-    public async Task<ApiResult> Debug(string flowKey, [FromBody] FlowDebugRequest req)
+    public async Task<ApiResult> Debug(string flowKey, [FromBody] FlowDebugRequest req,
+        [FromServices] IHttpClientFactory httpClientFactory)
     {
         var entity = await _db.FlowDefinitions
             .FirstOrDefaultAsync(f => f.FlowKey == flowKey && f.Deleted == 0);
@@ -140,10 +141,38 @@ public class FlowDefinitionController : ControllerBase
         if (string.IsNullOrEmpty(entity.FlowContent) || entity.FlowContent == "[]")
             return ApiResult.Fail("流程内容为空，请先设计流程");
 
-        var result = await _flowEngine.ExecuteAsync(entity.FlowContent, req.Params, flowKey, "debug");
+        // 加载数据源连接字符串（供 MYSQL 节点使用）
+        var dsConnStrings = await BuildDataSourceConnStrings();
+        var engine = new FlowEngine(httpClientFactory, dsConnStrings);
+        var result = await engine.ExecuteAsync(entity.FlowContent, req.Params, flowKey, "debug");
         return result.Success
             ? ApiResult.Success(result.OutputData)
             : ApiResult.Fail(result.ErrorMessage ?? "执行失败");
+    }
+
+    /// <summary>构建数据源名称→连接字符串映射</summary>
+    private async Task<Dictionary<string, string>> BuildDataSourceConnStrings()
+    {
+        var dataSources = await _db.DataSources.Where(d => d.Deleted == 0).ToListAsync();
+        var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var ds in dataSources)
+        {
+            if (string.IsNullOrEmpty(ds.DsName)) continue;
+            string connStr;
+            if (string.Equals(ds.DsType, "sqlite", StringComparison.OrdinalIgnoreCase) || string.IsNullOrEmpty(ds.Host))
+            {
+                // SQLite：DbName 当作文件路径
+                var dbPath = string.IsNullOrEmpty(ds.DbName) ? "juggle.db" : ds.DbName;
+                connStr = $"Data Source={dbPath}";
+            }
+            else
+            {
+                // MySQL
+                connStr = $"Server={ds.Host};Port={ds.Port};Database={ds.DbName};User={ds.Username};Password={ds.Password};";
+            }
+            map[ds.DsName] = connStr;
+        }
+        return map;
     }
 
     /// <summary>部署流程</summary>

@@ -62,6 +62,17 @@ public class DataSourceController : ControllerBase
         return ApiResult.Success();
     }
 
+    [HttpGet("list")]
+    public async Task<ApiResult> List()
+    {
+        var list = await _db.DataSources
+            .Where(d => d.Deleted == 0)
+            .OrderByDescending(d => d.Id)
+            .Select(d => new { dataSourceName = d.DsName, dataSourceType = d.DsType, id = d.Id })
+            .ToListAsync();
+        return ApiResult.Success(list);
+    }
+
     [HttpPost("page")]
     public async Task<ApiResult> Page([FromBody] PageRequest req)
     {
