@@ -1,9 +1,9 @@
+using System.Text.Json;
 using JuggleNet6.Backend.Domain.Entities;
-using JuggleNet6.Backend.Domain.Engine;
-using JuggleNet6.Backend.Domain.Engine.NodeExecutors;
 using JuggleNet6.Backend.Infrastructure.Persistence;
 using JuggleNet6.Backend.Models.Request;
 using JuggleNet6.Backend.Models.Response;
+using JuggleNet6.Backend.Services.Flow;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -16,12 +16,12 @@ namespace JuggleNet6.Backend.Controllers.Api;
 public class FlowDefinitionController : ControllerBase
 {
     private readonly JuggleDbContext _db;
-    private readonly FlowEngine _flowEngine;
+    private readonly FlowExecutionService _flowExec;
 
-    public FlowDefinitionController(JuggleDbContext db, FlowEngine flowEngine)
+    public FlowDefinitionController(JuggleDbContext db, FlowExecutionService flowExec)
     {
-        _db = db;
-        _flowEngine = flowEngine;
+        _db       = db;
+        _flowExec = flowExec;
     }
 
     [HttpPost("add")]
@@ -30,13 +30,13 @@ public class FlowDefinitionController : ControllerBase
         var key = $"flow_{Guid.NewGuid():N}";
         var entity = new FlowDefinitionEntity
         {
-            FlowKey = key,
-            FlowName = req.FlowName,
-            FlowDesc = req.FlowDesc,
-            FlowType = req.FlowType,
+            FlowKey     = key,
+            FlowName    = req.FlowName,
+            FlowDesc    = req.FlowDesc,
+            FlowType    = req.FlowType,
             FlowContent = "[]",
-            Status = 0,
-            CreatedAt = DateTime.Now.ToString("o")
+            Status      = 0,
+            CreatedAt   = DateTime.Now.ToString("o")
         };
         _db.FlowDefinitions.Add(entity);
         await _db.SaveChangesAsync();
@@ -48,7 +48,7 @@ public class FlowDefinitionController : ControllerBase
     {
         var entity = await _db.FlowDefinitions.FindAsync(id);
         if (entity == null) return ApiResult.Fail("流程不存在");
-        entity.Deleted = 1;
+        entity.Deleted   = 1;
         entity.UpdatedAt = DateTime.Now.ToString("o");
         await _db.SaveChangesAsync();
         return ApiResult.Success();
@@ -59,9 +59,9 @@ public class FlowDefinitionController : ControllerBase
     {
         var entity = await _db.FlowDefinitions.FindAsync(req.Id);
         if (entity == null) return ApiResult.Fail("流程不存在");
-        entity.FlowName = req.FlowName;
-        entity.FlowDesc = req.FlowDesc;
-        entity.FlowType = req.FlowType;
+        entity.FlowName  = req.FlowName;
+        entity.FlowDesc  = req.FlowDesc;
+        entity.FlowType  = req.FlowType;
         entity.UpdatedAt = DateTime.Now.ToString("o");
         await _db.SaveChangesAsync();
         return ApiResult.Success();
@@ -74,7 +74,7 @@ public class FlowDefinitionController : ControllerBase
         var entity = await _db.FlowDefinitions.FindAsync(req.Id);
         if (entity == null) return ApiResult.Fail("流程不存在");
         entity.FlowContent = req.FlowContent;
-        entity.UpdatedAt = DateTime.Now.ToString("o");
+        entity.UpdatedAt   = DateTime.Now.ToString("o");
         await _db.SaveChangesAsync();
         return ApiResult.Success();
     }
@@ -133,8 +133,7 @@ public class FlowDefinitionController : ControllerBase
 
     /// <summary>调试流程</summary>
     [HttpPost("debug/{flowKey}")]
-    public async Task<ApiResult> Debug(string flowKey, [FromBody] FlowDebugRequest req,
-        [FromServices] IHttpClientFactory httpClientFactory)
+    public async Task<ApiResult> Debug(string flowKey, [FromBody] FlowDebugRequest req)
     {
         var entity = await _db.FlowDefinitions
             .FirstOrDefaultAsync(f => f.FlowKey == flowKey && f.Deleted == 0);
@@ -142,35 +141,11 @@ public class FlowDefinitionController : ControllerBase
         if (string.IsNullOrEmpty(entity.FlowContent) || entity.FlowContent == "[]")
             return ApiResult.Fail("流程内容为空，请先设计流程");
 
-        // 加载数据源信息（供 DB 节点使用）
-        var dsInfos = await BuildDataSourceInfos();
-        var engine = new FlowEngine(httpClientFactory, dsInfos);
-        var result = await engine.ExecuteAsync(entity.FlowContent, req.Params, flowKey, "debug");
-        return result.Success
-            ? ApiResult.Success(result.OutputData)
-            : ApiResult.Fail(result.ErrorMessage ?? "执行失败");
-    }
+        var result = await _flowExec.RunAsync(entity, entity.FlowContent!, req.Params, "debug");
 
-    /// <summary>构建数据源名称 → DataSourceInfo 映射</summary>
-    private async Task<Dictionary<string, DataSourceInfo>> BuildDataSourceInfos()
-    {
-        var dataSources = await _db.DataSources.Where(d => d.Deleted == 0).ToListAsync();
-        var map = new Dictionary<string, DataSourceInfo>(StringComparer.OrdinalIgnoreCase);
-        foreach (var ds in dataSources)
-        {
-            if (string.IsNullOrEmpty(ds.DsName)) continue;
-            var dsType = (ds.DsType ?? "sqlite").ToLower();
-            string connStr = dsType switch
-            {
-                "sqlite" => $"Data Source={(string.IsNullOrEmpty(ds.DbName) ? "juggle.db" : ds.DbName)}",
-                "mysql"  => $"Server={ds.Host};Port={ds.Port};Database={ds.DbName};User={ds.Username};Password={ds.Password};CharSet=utf8mb4;",
-                "postgresql" or "postgres" => $"Host={ds.Host};Port={ds.Port};Database={ds.DbName};Username={ds.Username};Password={ds.Password};",
-                "sqlserver" or "mssql"     => $"Server={ds.Host},{ds.Port};Database={ds.DbName};User Id={ds.Username};Password={ds.Password};TrustServerCertificate=True;",
-                _ => $"Data Source={(string.IsNullOrEmpty(ds.DbName) ? "juggle.db" : ds.DbName)}"
-            };
-            map[ds.DsName] = new DataSourceInfo { DsType = dsType, ConnStr = connStr, DsName = ds.DsName };
-        }
-        return map;
+        return result.Success
+            ? ApiResult.Success(new { outputs = result.OutputData, logId = result.LogId, costMs = result.CostMs })
+            : ApiResult.Fail(result.ErrorMessage ?? "执行失败");
     }
 
     /// <summary>部署流程</summary>
@@ -189,11 +164,11 @@ public class FlowDefinitionController : ControllerBase
         {
             flowInfo = new FlowInfoEntity
             {
-                FlowKey = definition.FlowKey,
-                FlowName = definition.FlowName,
-                FlowDesc = definition.FlowDesc,
-                FlowType = definition.FlowType,
-                Status = 1,
+                FlowKey   = definition.FlowKey,
+                FlowName  = definition.FlowName,
+                FlowDesc  = definition.FlowDesc,
+                FlowType  = definition.FlowType,
+                Status    = 1,
                 CreatedAt = DateTime.Now.ToString("o")
             };
             _db.FlowInfos.Add(flowInfo);
@@ -209,18 +184,17 @@ public class FlowDefinitionController : ControllerBase
 
         int versionNum = 1;
         if (latestVersion != null && latestVersion.StartsWith("v"))
-            int.TryParse(latestVersion[1..], out versionNum) ;
-        var newVersion = $"v{versionNum + (latestVersion != null ? 1 : 0)}";
-        if (latestVersion == null) newVersion = "v1";
+            int.TryParse(latestVersion[1..], out versionNum);
+        var newVersion = latestVersion == null ? "v1" : $"v{versionNum + 1}";
 
         var flowVersion = new FlowVersionEntity
         {
-            FlowInfoId = flowInfo.Id,
-            FlowKey = definition.FlowKey,
-            Version = newVersion,
+            FlowInfoId  = flowInfo.Id,
+            FlowKey     = definition.FlowKey,
+            Version     = newVersion,
             FlowContent = definition.FlowContent,
-            Status = 1,
-            CreatedAt = DateTime.Now.ToString("o")
+            Status      = 1,
+            CreatedAt   = DateTime.Now.ToString("o")
         };
         _db.FlowVersions.Add(flowVersion);
         definition.Status = 1;

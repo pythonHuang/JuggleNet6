@@ -1,0 +1,40 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Juggle.Domain", "Juggle.Domain\Juggle.Domain.csproj", "{75AF93D5-D323-4CA3-8E0B-DB94BEB355B1}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Juggle.Application", "Juggle.Application\Juggle.Application.csproj", "{17E32DF7-1CC2-41A9-91BE-5DBCB12937D2}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Juggle.Infrastructure", "Juggle.Infrastructure\Juggle.Infrastructure.csproj", "{FA94BD2E-0A60-4831-9416-7826C70BBA39}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Juggle.Api", "Juggle.Api\Juggle.Api.csproj", "{B8BBFC8A-A264-41E0-9F03-444D5AD9BB3A}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{75AF93D5-D323-4CA3-8E0B-DB94BEB355B1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{75AF93D5-D323-4CA3-8E0B-DB94BEB355B1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{75AF93D5-D323-4CA3-8E0B-DB94BEB355B1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{75AF93D5-D323-4CA3-8E0B-DB94BEB355B1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{17E32DF7-1CC2-41A9-91BE-5DBCB12937D2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{17E32DF7-1CC2-41A9-91BE-5DBCB12937D2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{17E32DF7-1CC2-41A9-91BE-5DBCB12937D2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{17E32DF7-1CC2-41A9-91BE-5DBCB12937D2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{FA94BD2E-0A60-4831-9416-7826C70BBA39}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FA94BD2E-0A60-4831-9416-7826C70BBA39}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FA94BD2E-0A60-4831-9416-7826C70BBA39}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FA94BD2E-0A60-4831-9416-7826C70BBA39}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B8BBFC8A-A264-41E0-9F03-444D5AD9BB3A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B8BBFC8A-A264-41E0-9F03-444D5AD9BB3A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B8BBFC8A-A264-41E0-9F03-444D5AD9BB3A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B8BBFC8A-A264-41E0-9F03-444D5AD9BB3A}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal

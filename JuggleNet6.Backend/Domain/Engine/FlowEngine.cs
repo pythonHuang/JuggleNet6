@@ -6,18 +6,23 @@ namespace JuggleNet6.Backend.Domain.Engine;
 /// <summary>
 /// 流程执行引擎：解析流程 JSON，按节点拓扑顺序执行，维护变量上下文
 /// 支持节点类型：START / END / METHOD / CONDITION / ASSIGN / CODE / MYSQL(DB) / MERGE
+/// 支持功能：节点执行日志收集、静态全局变量读写
 /// </summary>
 public class FlowEngine
 {
     private readonly IHttpClientFactory _httpClientFactory;
-    /// <summary>数据源名称 → DataSourceInfo 映射（由 FlowDefinitionController 注入）</summary>
+    /// <summary>数据源名称 → DataSourceInfo 映射</summary>
     private readonly Dictionary<string, DataSourceInfo> _dataSources;
+    /// <summary>静态变量初始值（VarCode → Value）</summary>
+    private readonly Dictionary<string, string?> _staticVarSnapshot;
 
     public FlowEngine(IHttpClientFactory httpClientFactory,
-                      Dictionary<string, DataSourceInfo>? dataSources = null)
+                      Dictionary<string, DataSourceInfo>? dataSources = null,
+                      Dictionary<string, string?>? staticVariables = null)
     {
         _httpClientFactory = httpClientFactory;
         _dataSources = dataSources ?? new();
+        _staticVarSnapshot = staticVariables ?? new(StringComparer.OrdinalIgnoreCase);
     }
 
     public async Task<FlowResult> ExecuteAsync(
@@ -27,6 +32,7 @@ public class FlowEngine
         string version = "")
     {
         var result = new FlowResult { Success = true };
+        var startTime = DateTime.Now;
 
         // 1. 解析流程节点
         List<FlowNode>? nodes;
@@ -48,10 +54,13 @@ public class FlowEngine
         // 2. 建立节点索引
         var nodeMap = nodes.ToDictionary(n => n.Key, n => n);
 
-        // 3. 初始化上下文，写入输入变量
+        // 3. 初始化上下文，写入输入变量 + 静态变量
         var context = new FlowContext { FlowKey = flowKey, Version = version };
         foreach (var kv in inputParams)
             context.SetVariable(kv.Key, kv.Value);
+        // 注入静态变量（只读副本，修改时标记 ModifiedStaticVarCodes）
+        foreach (var kv in _staticVarSnapshot)
+            context.StaticVariables[kv.Key] = kv.Value;
 
         // 4. 找到 START 节点
         var startNode = nodes.FirstOrDefault(n => n.ElementType == "START");
@@ -65,7 +74,8 @@ public class FlowEngine
         }
         catch (Exception ex)
         {
-            return new FlowResult { Success = false, ErrorMessage = ex.Message };
+            result.Success = false;
+            result.ErrorMessage = ex.Message;
         }
 
         // 6. 收集所有输出变量（以 output_ 开头的变量）
@@ -74,6 +84,10 @@ public class FlowEngine
             if (kv.Key.StartsWith("output_"))
                 result.OutputData[kv.Key] = kv.Value;
         }
+
+        // 7. 挂载上下文和耗时到结果（供外层持久化日志）
+        result.Context = context;
+        result.CostMs = (long)(DateTime.Now - startTime).TotalMilliseconds;
 
         return result;
     }
@@ -97,12 +111,16 @@ public class FlowEngine
 
             // MERGE 节点：等待所有分支汇聚，返回 merge 之后的节点
             if (currentNode.ElementType == "MERGE")
-                return currentKey; // 把控制权返还给调用者（分支执行器）
+                return currentKey;
 
             // END 节点：执行后结束
             if (currentNode.ElementType == "END")
             {
+                var endLog = context.BeginNodeLog(currentNode.Key, currentNode.Label ?? "END", "END");
+                endLog.InputSnapshot = SnapshotVariables(context.Variables);
                 await new EndNodeExecutor().ExecuteAsync(currentNode, context);
+                endLog.Complete("SUCCESS");
+                endLog.OutputSnapshot = endLog.InputSnapshot;
                 return null;
             }
 
@@ -112,19 +130,34 @@ public class FlowEngine
 
             INodeExecutor executor = currentNode.ElementType switch
             {
-                "START"     => new StartNodeExecutor(),
-                "METHOD"    => new MethodNodeExecutor(_httpClientFactory),
-                "ASSIGN"    => new AssignNodeExecutor(),
-                "CODE"      => new CodeNodeExecutor(),
+                "START"         => new StartNodeExecutor(),
+                "METHOD"        => new MethodNodeExecutor(_httpClientFactory),
+                "ASSIGN"        => new AssignNodeExecutor(),
+                "CODE"          => new CodeNodeExecutor(),
                 "MYSQL" or "DB" => new MysqlNodeExecutor(_dataSources),
-                "CONDITION" => new ConditionNodeExecutor(),
+                "CONDITION"     => new ConditionNodeExecutor(),
                 _ => throw new InvalidOperationException($"未知节点类型: {currentNode.ElementType}")
             };
 
             if (currentNode.ElementType == "CONDITION")
             {
                 // CONDITION：选出要走的分支 key
-                var branchKey = await executor.ExecuteAsync(currentNode, context);
+                var condLog = context.BeginNodeLog(currentNode.Key, currentNode.Label ?? "CONDITION", "CONDITION");
+                condLog.InputSnapshot = SnapshotVariables(context.Variables);
+
+                string? branchKey;
+                try
+                {
+                    branchKey = await executor.ExecuteAsync(currentNode, context);
+                    condLog.Complete("SUCCESS", detail: $"走分支: {branchKey}");
+                    condLog.OutputSnapshot = SnapshotVariables(context.Variables);
+                }
+                catch (Exception ex)
+                {
+                    condLog.Complete("FAILED", errorMsg: ex.Message);
+                    throw;
+                }
+
                 if (string.IsNullOrEmpty(branchKey)) break;
 
                 // 查找是否有 MERGE 节点
@@ -132,26 +165,56 @@ public class FlowEngine
 
                 if (mergeKey != null && nodeMap.ContainsKey(mergeKey))
                 {
-                    // 执行选中分支，直到遇到 MERGE 节点
                     await ExecuteFromNode(branchKey, nodeMap, context);
-                    // 所有分支汇聚后，继续从 MERGE 之后的节点执行
                     var mergeNode = nodeMap[mergeKey];
                     currentKey = mergeNode.Outgoings.FirstOrDefault() ?? "";
                 }
                 else
                 {
-                    // 没有 MERGE 聚合，直接沿分支执行到底
                     currentKey = branchKey;
                 }
                 continue;
             }
 
-            var nextKey = await executor.ExecuteAsync(currentNode, context);
+            // 普通节点执行（带日志）
+            var nodeLog = context.BeginNodeLog(currentNode.Key, currentNode.Label ?? currentNode.ElementType, currentNode.ElementType);
+            nodeLog.InputSnapshot = SnapshotVariables(context.Variables);
+
+            string? nextKey;
+            try
+            {
+                nextKey = await executor.ExecuteAsync(currentNode, context);
+                nodeLog.Complete("SUCCESS");
+                nodeLog.OutputSnapshot = SnapshotVariables(context.Variables);
+            }
+            catch (Exception ex)
+            {
+                nodeLog.Complete("FAILED", errorMsg: ex.Message);
+                throw;
+            }
+
             if (nextKey == null) break;
             currentKey = nextKey;
         }
 
         return null;
+    }
+
+    /// <summary>序列化变量快照（过滤空值，防止 JSON 过大）</summary>
+    private static string SnapshotVariables(Dictionary<string, object?> vars)
+    {
+        try
+        {
+            return JsonSerializer.Serialize(vars, new JsonSerializerOptions
+            {
+                WriteIndented = false,
+                DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
+            });
+        }
+        catch
+        {
+            return "{}";
+        }
     }
 
     /// <summary>在 CONDITION 节点的所有分支中，找到共同的 MERGE 节点</summary>
@@ -160,7 +223,6 @@ public class FlowEngine
         if (conditionNode.Conditions == null || conditionNode.Conditions.Count == 0)
             return null;
 
-        // 检查每个分支的直接或间接后继是否有 MERGE 节点
         foreach (var cond in conditionNode.Conditions)
         {
             if (string.IsNullOrEmpty(cond.Outgoing)) continue;

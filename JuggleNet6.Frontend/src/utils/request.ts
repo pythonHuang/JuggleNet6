@@ -33,7 +33,14 @@ request.interceptors.response.use(
     }
   },
   (error) => {
-    ElMessage.error(error.message || '网络错误')
+    // HTTP 401 状态码（JWT 无效/过期）—— 清除 token 并跳转登录
+    if (error.response?.status === 401) {
+      localStorage.removeItem('token')
+      router.push('/login')
+      ElMessage.error('登录已过期，请重新登录')
+    } else {
+      ElMessage.error(error.response?.data?.message || error.message || '网络错误')
+    }
     return Promise.reject(error)
   }
 )

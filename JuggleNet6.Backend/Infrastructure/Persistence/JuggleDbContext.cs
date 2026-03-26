@@ -18,6 +18,9 @@ public class JuggleDbContext : DbContext
     public DbSet<FlowVersionEntity> FlowVersions { get; set; } = null!;
     public DbSet<TokenEntity> Tokens { get; set; } = null!;
     public DbSet<DataSourceEntity> DataSources { get; set; } = null!;
+    public DbSet<FlowLogEntity> FlowLogs { get; set; } = null!;
+    public DbSet<FlowNodeLogEntity> FlowNodeLogs { get; set; } = null!;
+    public DbSet<StaticVariableEntity> StaticVariables { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -35,6 +38,9 @@ public class JuggleDbContext : DbContext
         modelBuilder.Entity<FlowVersionEntity>().ToTable("t_flow_version");
         modelBuilder.Entity<TokenEntity>().ToTable("t_token");
         modelBuilder.Entity<DataSourceEntity>().ToTable("t_data_source");
+        modelBuilder.Entity<FlowLogEntity>().ToTable("t_flow_log");
+        modelBuilder.Entity<FlowNodeLogEntity>().ToTable("t_flow_node_log");
+        modelBuilder.Entity<StaticVariableEntity>().ToTable("t_static_variable");
 
         // 列名映射（snake_case）
         modelBuilder.Entity<UserEntity>(e => {
@@ -201,6 +207,64 @@ public class JuggleDbContext : DbContext
             e.Property(p => p.DbName).HasColumnName("db_name");
             e.Property(p => p.Username).HasColumnName("username");
             e.Property(p => p.Password).HasColumnName("password");
+        });
+
+        modelBuilder.Entity<FlowLogEntity>(e => {
+            e.Property(p => p.Id).HasColumnName("id");
+            e.Property(p => p.Deleted).HasColumnName("deleted");
+            e.Property(p => p.CreatedAt).HasColumnName("created_at");
+            e.Property(p => p.CreatedBy).HasColumnName("created_by");
+            e.Property(p => p.UpdatedAt).HasColumnName("updated_at");
+            e.Property(p => p.UpdatedBy).HasColumnName("updated_by");
+            e.Property(p => p.FlowKey).HasColumnName("flow_key");
+            e.Property(p => p.FlowName).HasColumnName("flow_name");
+            e.Property(p => p.Version).HasColumnName("version");
+            e.Property(p => p.TriggerType).HasColumnName("trigger_type");
+            e.Property(p => p.Status).HasColumnName("status");
+            e.Property(p => p.StartTime).HasColumnName("start_time");
+            e.Property(p => p.EndTime).HasColumnName("end_time");
+            e.Property(p => p.CostMs).HasColumnName("cost_ms");
+            e.Property(p => p.ErrorMessage).HasColumnName("error_message");
+            e.Property(p => p.InputJson).HasColumnName("input_json");
+            e.Property(p => p.OutputJson).HasColumnName("output_json");
+        });
+
+        modelBuilder.Entity<FlowNodeLogEntity>(e => {
+            e.Property(p => p.Id).HasColumnName("id");
+            e.Property(p => p.Deleted).HasColumnName("deleted");
+            e.Property(p => p.CreatedAt).HasColumnName("created_at");
+            e.Property(p => p.CreatedBy).HasColumnName("created_by");
+            e.Property(p => p.UpdatedAt).HasColumnName("updated_at");
+            e.Property(p => p.UpdatedBy).HasColumnName("updated_by");
+            e.Property(p => p.FlowLogId).HasColumnName("flow_log_id");
+            e.Property(p => p.NodeKey).HasColumnName("node_key");
+            e.Property(p => p.NodeLabel).HasColumnName("node_label");
+            e.Property(p => p.NodeType).HasColumnName("node_type");
+            e.Property(p => p.SeqNo).HasColumnName("seq_no");
+            e.Property(p => p.Status).HasColumnName("status");
+            e.Property(p => p.StartTime).HasColumnName("start_time");
+            e.Property(p => p.EndTime).HasColumnName("end_time");
+            e.Property(p => p.CostMs).HasColumnName("cost_ms");
+            e.Property(p => p.InputSnapshot).HasColumnName("input_snapshot");
+            e.Property(p => p.OutputSnapshot).HasColumnName("output_snapshot");
+            e.Property(p => p.Detail).HasColumnName("detail");
+            e.Property(p => p.ErrorMessage).HasColumnName("error_message");
+        });
+
+        modelBuilder.Entity<StaticVariableEntity>(e => {
+            e.Property(p => p.Id).HasColumnName("id");
+            e.Property(p => p.Deleted).HasColumnName("deleted");
+            e.Property(p => p.CreatedAt).HasColumnName("created_at");
+            e.Property(p => p.CreatedBy).HasColumnName("created_by");
+            e.Property(p => p.UpdatedAt).HasColumnName("updated_at");
+            e.Property(p => p.UpdatedBy).HasColumnName("updated_by");
+            e.Property(p => p.VarCode).HasColumnName("var_code");
+            e.Property(p => p.VarName).HasColumnName("var_name");
+            e.Property(p => p.DataType).HasColumnName("data_type");
+            e.Property(p => p.Value).HasColumnName("value");
+            e.Property(p => p.DefaultValue).HasColumnName("default_value");
+            e.Property(p => p.Description).HasColumnName("description");
+            e.Property(p => p.GroupName).HasColumnName("group_name");
         });
 
         // 初始数据

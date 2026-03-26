@@ -1,7 +1,7 @@
-using JuggleNet6.Backend.Domain.Engine;
 using JuggleNet6.Backend.Infrastructure.Persistence;
 using JuggleNet6.Backend.Models.Request;
 using JuggleNet6.Backend.Models.Response;
+using JuggleNet6.Backend.Services.Flow;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -13,13 +13,13 @@ namespace JuggleNet6.Backend.Controllers.Api;
 [Authorize]
 public class FlowVersionController : ControllerBase
 {
-    private readonly JuggleDbContext _db;
-    private readonly FlowEngine _flowEngine;
+    private readonly JuggleDbContext      _db;
+    private readonly FlowExecutionService _flowExec;
 
-    public FlowVersionController(JuggleDbContext db, FlowEngine flowEngine)
+    public FlowVersionController(JuggleDbContext db, FlowExecutionService flowExec)
     {
-        _db = db;
-        _flowEngine = flowEngine;
+        _db       = db;
+        _flowExec = flowExec;
     }
 
     [HttpPost("page")]
@@ -28,7 +28,7 @@ public class FlowVersionController : ControllerBase
         var query = _db.FlowVersions.Where(v => v.Deleted == 0);
         if (!string.IsNullOrEmpty(req.FlowKey))
             query = query.Where(v => v.FlowKey == req.FlowKey);
-        var total = await query.CountAsync();
+        var total   = await query.CountAsync();
         var records = await query
             .OrderByDescending(v => v.Id)
             .Skip((req.PageNum - 1) * req.PageSize)
@@ -45,7 +45,7 @@ public class FlowVersionController : ControllerBase
     {
         var entity = await _db.FlowVersions.FindAsync(req.Id);
         if (entity == null) return ApiResult.Fail("版本不存在");
-        entity.Status = req.Status;
+        entity.Status    = req.Status;
         entity.UpdatedAt = DateTime.Now.ToString("o");
         await _db.SaveChangesAsync();
         return ApiResult.Success();
@@ -56,7 +56,7 @@ public class FlowVersionController : ControllerBase
     {
         var entity = await _db.FlowVersions.FindAsync(id);
         if (entity == null) return ApiResult.Fail("版本不存在");
-        entity.Deleted = 1;
+        entity.Deleted   = 1;
         entity.UpdatedAt = DateTime.Now.ToString("o");
         await _db.SaveChangesAsync();
         return ApiResult.Success();
@@ -73,17 +73,24 @@ public class FlowVersionController : ControllerBase
         return ApiResult.Success(version);
     }
 
-    /// <summary>通过管理接口触发流程（测试用）</summary>
+    /// <summary>通过管理接口触发流程（测试用）— 现在会完整记录日志并回写静态变量。</summary>
     [HttpPost("trigger/{version}/{key}")]
     public async Task<ApiResult> Trigger(string version, string key, [FromBody] FlowDebugRequest req)
     {
         var flowVersion = await _db.FlowVersions
-            .FirstOrDefaultAsync(v => v.FlowKey == key && v.Version == version && v.Status == 1 && v.Deleted == 0);
+            .FirstOrDefaultAsync(v => v.FlowKey == key && v.Version == version
+                                   && v.Status == 1 && v.Deleted == 0);
         if (flowVersion == null) return ApiResult.Fail("流程版本不存在或已禁用");
 
-        var result = await _flowEngine.ExecuteAsync(flowVersion.FlowContent!, req.Params, key, version);
+        var definition = await _db.FlowDefinitions
+            .FirstOrDefaultAsync(f => f.FlowKey == key && f.Deleted == 0);
+        if (definition == null) return ApiResult.Fail("流程定义不存在");
+
+        var result = await _flowExec.RunAsync(
+            definition, flowVersion.FlowContent!, req.Params, "version", version);
+
         return result.Success
-            ? ApiResult.Success(result.OutputData)
+            ? ApiResult.Success(new { outputs = result.OutputData, logId = result.LogId, costMs = result.CostMs })
             : ApiResult.Fail(result.ErrorMessage ?? "执行失败");
     }
 }

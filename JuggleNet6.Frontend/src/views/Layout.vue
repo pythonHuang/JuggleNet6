@@ -14,6 +14,7 @@
           </template>
           <el-menu-item index="/flow/define">流程定义</el-menu-item>
           <el-menu-item index="/flow/list">流程列表</el-menu-item>
+          <el-menu-item index="/flow/log">执行日志</el-menu-item>
         </el-sub-menu>
         <el-sub-menu index="suite">
           <template #title>
@@ -33,6 +34,7 @@
           </template>
           <el-menu-item index="/system/token">Token管理</el-menu-item>
           <el-menu-item index="/system/datasource">数据源管理</el-menu-item>
+          <el-menu-item index="/system/static-var">静态变量</el-menu-item>
         </el-sub-menu>
       </el-menu>
     </el-aside>
@@ -69,6 +71,7 @@
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
+import { Connection, Grid, DataBoard, Setting, ArrowDown } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const router = useRouter()

@@ -107,13 +107,17 @@ public class AssignRule
     [JsonPropertyName("source")]
     public string Source { get; set; } = "";
 
-    /// <summary>VARIABLE / CONSTANT</summary>
+    /// <summary>VARIABLE / CONSTANT / STATIC（全局静态变量）</summary>
     [JsonPropertyName("sourceType")]
     public string SourceType { get; set; } = "VARIABLE";
 
     /// <summary>目标变量名</summary>
     [JsonPropertyName("target")]
     public string Target { get; set; } = "";
+
+    /// <summary>目标类型：VARIABLE（流程变量）/ STATIC（全局静态变量）</summary>
+    [JsonPropertyName("targetType")]
+    public string TargetType { get; set; } = "VARIABLE";
 
     /// <summary>数据类型（用于常量解析）：string/integer/double/boolean</summary>
     [JsonPropertyName("dataType")]

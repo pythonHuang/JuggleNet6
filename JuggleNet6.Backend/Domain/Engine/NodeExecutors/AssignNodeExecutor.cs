@@ -2,6 +2,13 @@ namespace JuggleNet6.Backend.Domain.Engine.NodeExecutors;
 
 /// <summary>
 /// ASSIGN 赋值节点执行器：根据赋值规则将常量或变量值写入目标变量
+/// sourceType 支持：
+///   CONSTANT      — 常量值
+///   VARIABLE      — 流程变量
+///   STATIC        — 全局静态变量（$static.xxx）
+/// targetType 支持：
+///   (默认)         — 流程变量
+///   STATIC        — 写入全局静态变量（执行后持久化）
 /// </summary>
 public class AssignNodeExecutor : INodeExecutor
 {
@@ -11,18 +18,30 @@ public class AssignNodeExecutor : INodeExecutor
         {
             foreach (var rule in node.AssignRules)
             {
+                // ==== 读取来源值 ====
                 object? value;
-                if (rule.SourceType == "CONSTANT")
+                var srcType = (rule.SourceType ?? "VARIABLE").ToUpper();
+                switch (srcType)
                 {
-                    // 常量赋值：直接使用 source 字符串值，尝试类型转换
-                    value = ParseConstant(rule.Source, rule.DataType);
+                    case "CONSTANT":
+                        value = ParseConstant(rule.Source, rule.DataType);
+                        break;
+                    case "STATIC":
+                        // 从全局静态变量读取
+                        value = context.GetStaticVariable(rule.Source);
+                        break;
+                    default:
+                        // VARIABLE
+                        value = context.GetVariable(rule.Source);
+                        break;
                 }
+
+                // ==== 写入目标 ====
+                var tgtType = (rule.TargetType ?? "VARIABLE").ToUpper();
+                if (tgtType == "STATIC")
+                    context.SetStaticVariable(rule.Target, value?.ToString());
                 else
-                {
-                    // 变量赋值：从上下文取值
-                    value = context.GetVariable(rule.Source);
-                }
-                context.SetVariable(rule.Target, value);
+                    context.SetVariable(rule.Target, value);
             }
         }
 

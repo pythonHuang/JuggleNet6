@@ -1,5 +1,7 @@
 using JuggleNet6.Backend.Domain.Engine;
 using JuggleNet6.Backend.Infrastructure.Persistence;
+using JuggleNet6.Backend.Services.Flow;
+using JuggleNet6.Backend.Services.Impl;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -38,6 +40,21 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidAudience = "JuggleNet6",
             ValidateLifetime = true
         };
+        // 统一返回 JSON 格式的 401，方便前端处理
+        opts.Events = new Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerEvents
+        {
+            OnChallenge = async ctx =>
+            {
+                ctx.HandleResponse();
+                ctx.Response.StatusCode  = 401;
+                ctx.Response.ContentType = "application/json";
+                await ctx.Response.WriteAsync(
+                    System.Text.Json.JsonSerializer.Serialize(
+                        new { code = 401, message = "未授权，请先登录", data = (object?)null },
+                        new System.Text.Json.JsonSerializerOptions { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase }
+                    ));
+            }
+        };
     });
 
 builder.Services.AddAuthorization();
@@ -47,6 +64,11 @@ builder.Services.AddHttpClient();
 
 // 流程引擎（Scoped，因依赖 HttpClientFactory）
 builder.Services.AddScoped<FlowEngine>();
+
+// ── 业务 Service 层 ──────────────────────────────────────────────
+builder.Services.AddScoped<FlowExecutionService>();  // 流程执行核心（数据源、静态变量、日志）
+builder.Services.AddScoped<DataSourceService>();     // 数据源连接字符串构建 + 连接测试
+builder.Services.AddScoped<JwtService>();            // JWT Token 签发
 
 // Swagger
 builder.Services.AddEndpointsApiExplorer();
