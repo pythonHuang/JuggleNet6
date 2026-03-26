@@ -7,17 +7,20 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Text.Unicode;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // ==================== 服务注册 ====================
 
-// JSON 配置（camelCase 输出）
+// JSON 配置（camelCase 输出，中文不转义）
 builder.Services.AddControllers().AddJsonOptions(opts =>
 {
     opts.JsonSerializerOptions.PropertyNamingPolicy        = JsonNamingPolicy.CamelCase;
     opts.JsonSerializerOptions.DefaultIgnoreCondition      = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull;
+    opts.JsonSerializerOptions.Encoder                     = JavaScriptEncoder.Create(UnicodeRanges.All);
 });
 
 // SQLite + EF Core
@@ -51,7 +54,11 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 await ctx.Response.WriteAsync(
                     JsonSerializer.Serialize(
                         new { code = 401, message = "未授权，请先登录", data = (object?)null },
-                        new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }
+                        new JsonSerializerOptions
+                        {
+                            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                            Encoder = JavaScriptEncoder.Create(UnicodeRanges.All)
+                        }
                     ));
             }
         };

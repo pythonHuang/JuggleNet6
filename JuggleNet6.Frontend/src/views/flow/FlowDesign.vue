@@ -1,5 +1,5 @@
 <template>
-  <div class="designer-container">
+  <div class="designer-container" @keydown.delete="onDeleteKey" @keydown.ctrl.z.prevent="undo" @keydown.ctrl.y.prevent="redo" tabindex="0" ref="containerRef">
     <!-- 顶部工具栏 -->
     <div class="toolbar">
       <div class="toolbar-left">
@@ -17,6 +17,8 @@
         <el-button size="small" @click="addNode('END')" :disabled="hasEnd" class="tb-btn-end">⏹ 结束</el-button>
       </div>
       <div class="toolbar-right">
+        <el-tooltip content="撤销 (Ctrl+Z)"><el-button size="small" icon="RefreshLeft" :disabled="undoStack.length === 0" @click="undo" /></el-tooltip>
+        <el-tooltip content="重做 (Ctrl+Y)"><el-button size="small" icon="RefreshRight" :disabled="redoStack.length === 0" @click="redo" /></el-tooltip>
         <el-button size="small" @click="autoLayout" icon="Grid">自动布局</el-button>
         <el-button size="small" @click="paramDrawer = true" icon="Setting">流程参数</el-button>
         <el-button size="small" @click="variableDrawer = true" icon="List">变量</el-button>
@@ -42,6 +44,7 @@
           @edge-click="onVfEdgeClick"
           @connect="onVfConnect"
           @edge-update="onVfEdgeUpdate"
+          @pane-click="onPaneClick"
           class="vf-canvas"
         >
           <Background :variant="'dots'" :gap="20" :size="1.2" :color="'#d0d7e3'" />
@@ -52,13 +55,29 @@
           <template #node-juggle="{ data }">
             <div
               class="jg-node"
-              :class="['jg-' + data.elementType.toLowerCase(), selectedNodeKey === data.nodeKey ? 'jg-selected' : '']"
+              :class="[
+                'jg-' + data.elementType.toLowerCase(),
+                selectedNodeKey === data.nodeKey ? 'jg-selected' : '',
+                debugNodeStatus[data.nodeKey] === 'success' ? 'jg-debug-success' : '',
+                debugNodeStatus[data.nodeKey] === 'fail' ? 'jg-debug-fail' : '',
+                debugNodeStatus[data.nodeKey] === 'running' ? 'jg-debug-running' : ''
+              ]"
               @click.stop="selectNodeByKey(data.nodeKey)"
             >
               <Handle type="target" :position="Position.Top" class="jg-handle jg-handle-top" />
+              <!-- 调试状态图标 -->
+              <div v-if="debugNodeStatus[data.nodeKey]" class="jg-debug-badge">
+                <span v-if="debugNodeStatus[data.nodeKey] === 'success'">✓</span>
+                <span v-else-if="debugNodeStatus[data.nodeKey] === 'fail'">✗</span>
+                <span v-else>⏳</span>
+              </div>
               <div class="jg-icon">{{ nodeIcon(data.elementType) }}</div>
               <div class="jg-name">{{ data.label || data.nodeKey }}</div>
               <div class="jg-type">{{ nodeTypeName(data.elementType) }}</div>
+              <!-- 调试输出变量预览 -->
+              <div v-if="debugNodeOutput[data.nodeKey]" class="jg-debug-output" @click.stop="showNodeDebugDetail(data.nodeKey)">
+                📊 查看输出
+              </div>
               <Handle type="source" :position="Position.Bottom" class="jg-handle jg-handle-bottom" />
             </div>
           </template>
@@ -69,17 +88,44 @@
           <div style="font-size:48px;color:#ddd">⬡</div>
           <p>从工具栏点击按钮添加节点，然后拖拽连接线建立流程</p>
         </div>
+
+        <!-- 删除提示（选中时显示） -->
+        <div class="delete-hint" v-if="selectedNodeKey || selectedEdgeId">
+          <span v-if="selectedNodeKey">已选中节点：<b>{{ selectedNodeKey }}</b></span>
+          <span v-if="selectedEdgeId">已选中连线</span>
+          &nbsp;&nbsp;按 <kbd>Delete</kbd> 删除
+        </div>
       </div>
 
       <!-- 右侧属性面板 -->
       <div class="right-panel">
-        <div class="panel-title" v-if="selectedNode">
+        <div class="panel-title" v-if="selectedEdgeId && !selectedNodeKey">
+          <span style="color:#1890ff">━</span>
+          连线属性
+          <el-button size="small" type="danger" link icon="Delete"
+            style="margin-left:auto" @click="removeEdge(selectedEdgeId)">删除连线</el-button>
+        </div>
+        <div class="panel-title" v-else-if="selectedNode">
           <span :class="'type-dot-' + selectedNode.elementType.toLowerCase()">●</span>
           {{ nodeTypeName(selectedNode.elementType) }} 属性
           <el-button size="small" type="danger" link icon="Delete"
             style="margin-left:auto" @click="removeNode(selectedNode.key)">删除</el-button>
         </div>
         <div class="panel-title" v-else>节点属性</div>
+        <!-- 连线选中时显示删除面板 -->
+        <div v-if="selectedEdgeId && !selectedNodeKey" class="prop-content">
+          <div class="prop-tip" style="background:#fff2f0;color:#ff4d4f">
+            已选中该连线，可点击右上角「删除连线」或按 <b>Delete</b> 键删除。
+          </div>
+          <div v-if="selectedEdgeInfo" class="prop-item">
+            <label>起始节点</label>
+            <el-input :value="selectedEdgeInfo.source" disabled size="small" />
+          </div>
+          <div v-if="selectedEdgeInfo" class="prop-item">
+            <label>目标节点</label>
+            <el-input :value="selectedEdgeInfo.target" disabled size="small" />
+          </div>
+        </div>
 
         <div class="prop-content" v-if="selectedNode">
           <div class="prop-item">
@@ -455,7 +501,7 @@
     </el-drawer>
 
     <!-- ========== 调试弹窗 ========== -->
-    <el-dialog v-model="debugVisible" title="🐛 流程调试" width="660px">
+    <el-dialog v-model="debugVisible" title="🐛 流程调试" width="780px" :close-on-click-modal="false">
       <div style="margin-bottom:8px;color:#666;font-size:13px">
         已定义的入参：
         <el-tag v-for="p in flowInputParams" :key="p.paramCode" size="small" style="margin-right:4px">
@@ -465,23 +511,81 @@
       </div>
       <el-form label-width="100px">
         <el-form-item label="输入参数">
-          <el-input v-model="debugParams" type="textarea" :rows="6"
+          <el-input v-model="debugParams" type="textarea" :rows="5"
             placeholder='{"input_city": "北京", "input_name": "张三"}' class="code-editor" />
         </el-form-item>
       </el-form>
-      <div v-if="debugResult !== null" style="margin-top:12px">
+
+      <div v-if="debugResult !== null" style="margin-top:8px">
         <el-divider />
-        <div style="font-weight:bold;margin-bottom:8px;color:#333;display:flex;align-items:center;gap:6px">
-          <span :style="{ color: debugResult.success ? '#52c41a' : '#ff4d4f' }">
-            {{ debugResult.success ? '✓ 执行成功' : '✗ 执行失败' }}
+        <!-- 执行状态 -->
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+          <span style="font-weight:bold;font-size:15px" :style="{ color: debugResult.success ? '#52c41a' : '#ff4d4f' }">
+            {{ debugResult.success ? '✅ 执行成功' : '❌ 执行失败' }}
           </span>
+          <span v-if="debugResult.executionTime" style="color:#888;font-size:12px">
+            耗时 {{ debugResult.executionTime }} ms
+          </span>
+          <el-button size="small" @click="clearDebugHighlight" v-if="hasDebugHighlight">清除高亮</el-button>
         </div>
-        <el-input v-model="debugResultStr" type="textarea" :rows="8" readonly class="code-editor" />
+
+        <el-tabs v-model="debugTab">
+          <!-- 节点执行时间轴 -->
+          <el-tab-pane label="🔍 节点执行详情" name="timeline">
+            <div v-if="debugResult.nodeLogs && debugResult.nodeLogs.length" style="max-height:300px;overflow-y:auto;padding:4px 0">
+              <div v-for="(log, idx) in debugResult.nodeLogs" :key="idx"
+                class="debug-timeline-item"
+                :class="log.status === 'SUCCESS' ? 'dtl-success' : 'dtl-fail'"
+                @click="showNodeDebugDetail(log.nodeKey)"
+              >
+                <div class="dtl-seq">{{ getLogSeq(log, idx) }}</div>
+                <div class="dtl-body">
+                  <div class="dtl-header">
+                    <span class="dtl-icon">{{ nodeIcon(log.nodeType || '') }}</span>
+                    <span class="dtl-key">{{ log.nodeKey }}</span>
+                    <el-tag size="small" :type="log.status === 'SUCCESS' ? 'success' : 'danger'" style="margin-left:6px">
+                      {{ log.status === 'SUCCESS' ? '✓ 成功' : '✗ 失败' }}
+                    </el-tag>
+                    <span v-if="log.executionTime" style="color:#aaa;font-size:11px;margin-left:auto">{{ log.executionTime }}ms</span>
+                  </div>
+                  <div v-if="log.status !== 'SUCCESS' && log.detail" class="dtl-error">{{ log.detail }}</div>
+                </div>
+              </div>
+            </div>
+            <el-empty v-else description="暂无节点执行记录" :image-size="40" />
+          </el-tab-pane>
+
+          <!-- 输出结果 -->
+          <el-tab-pane label="📤 输出结果" name="output">
+            <el-input :value="debugOutputStr" type="textarea" :rows="8" readonly class="code-editor" />
+          </el-tab-pane>
+
+          <!-- 完整JSON -->
+          <el-tab-pane label="📋 完整JSON" name="raw">
+            <el-input v-model="debugResultStr" type="textarea" :rows="8" readonly class="code-editor" />
+          </el-tab-pane>
+        </el-tabs>
       </div>
+
       <template #footer>
         <el-button @click="debugVisible = false">关闭</el-button>
         <el-button type="primary" @click="runDebug" :loading="debugLoading">执行</el-button>
       </template>
+    </el-dialog>
+
+    <!-- 节点调试详情弹窗 -->
+    <el-dialog v-model="nodeDebugDetailVisible" :title="`节点调试详情：${nodeDebugDetailKey}`" width="620px" append-to-body>
+      <el-tabs>
+        <el-tab-pane label="输入变量快照">
+          <el-input :value="nodeDebugInputStr" type="textarea" :rows="8" readonly class="code-editor" />
+        </el-tab-pane>
+        <el-tab-pane label="输出变量快照">
+          <el-input :value="nodeDebugOutputStr" type="textarea" :rows="8" readonly class="code-editor" />
+        </el-tab-pane>
+        <el-tab-pane label="详细信息">
+          <el-input :value="nodeDebugDetailStr" type="textarea" :rows="8" readonly class="code-editor" />
+        </el-tab-pane>
+      </el-tabs>
     </el-dialog>
   </div>
 </template>
@@ -507,11 +611,13 @@ import '@vue-flow/minimap/dist/style.css'
 const route = useRoute()
 const router = useRouter()
 const flowKey = route.params.flowKey as string
+const containerRef = ref<HTMLElement | null>(null)
 
 // ====== 业务节点数据（原格式） ======
 const flowInfo = ref<any>(null)
-const businessNodes = ref<any[]>([])   // 原始节点数据，与后端格式一致
+const businessNodes = ref<any[]>([])
 const selectedNodeKey = ref<string | null>(null)
+const selectedEdgeId = ref<string | null>(null)
 const allVariables = ref<any[]>([])
 const apiOptions = ref<any[]>([])
 const dataSources = ref<any[]>([])
@@ -521,7 +627,61 @@ const methodApiSelection = ref<any[]>([])
 const vfNodes = ref<any[]>([])
 const vfEdges = ref<any[]>([])
 
-// 节点颜色（minimap用）
+// ====== 撤销/重做栈 ======
+interface Snapshot {
+  nodes: any[]
+  edges: any[]
+}
+const undoStack = ref<Snapshot[]>([])
+const redoStack = ref<Snapshot[]>([])
+let _suppressHistory = false
+
+function takeSnapshot() {
+  if (_suppressHistory) return
+  undoStack.value.push({
+    nodes: JSON.parse(JSON.stringify(businessNodes.value)),
+    edges: JSON.parse(JSON.stringify(vfEdges.value))
+  })
+  // 每次操作后清空重做栈
+  redoStack.value = []
+  // 最多保留50步
+  if (undoStack.value.length > 50) undoStack.value.shift()
+}
+
+function restoreSnapshot(snap: Snapshot) {
+  _suppressHistory = true
+  businessNodes.value = JSON.parse(JSON.stringify(snap.nodes))
+  vfEdges.value = JSON.parse(JSON.stringify(snap.edges))
+  syncBusinessNodesToVf()
+  selectedNodeKey.value = null
+  selectedEdgeId.value = null
+  _suppressHistory = false
+}
+
+function undo() {
+  if (undoStack.value.length === 0) return
+  // 把当前状态压入重做栈
+  redoStack.value.push({
+    nodes: JSON.parse(JSON.stringify(businessNodes.value)),
+    edges: JSON.parse(JSON.stringify(vfEdges.value))
+  })
+  const snap = undoStack.value.pop()!
+  restoreSnapshot(snap)
+  ElMessage.info('已撤销')
+}
+
+function redo() {
+  if (redoStack.value.length === 0) return
+  undoStack.value.push({
+    nodes: JSON.parse(JSON.stringify(businessNodes.value)),
+    edges: JSON.parse(JSON.stringify(vfEdges.value))
+  })
+  const snap = redoStack.value.pop()!
+  restoreSnapshot(snap)
+  ElMessage.info('已重做')
+}
+
+// ====== 节点颜色（minimap用） ======
 function vfNodeColor(node: any) {
   const map: Record<string, string> = {
     start: '#52c41a', end: '#ff4d4f', method: '#1890ff',
@@ -542,16 +702,58 @@ const variableDrawer = ref(false)
 const varDialogVisible = ref(false)
 const varForm = ref({ variableCode: '', variableName: '', variableType: 'VARIABLE', dataType: 'string', defaultValue: '' })
 
-// 调试
+// ====== 调试相关 ======
 const debugVisible = ref(false)
 const debugLoading = ref(false)
 const debugParams = ref('{}')
 const debugResult = ref<any>(null)
+const debugTab = ref('timeline')
+// 节点调试状态：nodeKey -> 'success' | 'fail' | 'running'
+const debugNodeStatus = ref<Record<string, string>>({})
+// 节点调试输出：nodeKey -> log
+const debugNodeOutput = ref<Record<string, any>>({})
+const hasDebugHighlight = computed(() => Object.keys(debugNodeStatus.value).length > 0)
+
+// 节点详情弹窗
+const nodeDebugDetailVisible = ref(false)
+const nodeDebugDetailKey = ref('')
+const nodeDebugInputStr = ref('')
+const nodeDebugOutputStr = ref('')
+const nodeDebugDetailStr = ref('')
+
 const debugResultStr = computed(() => debugResult.value ? JSON.stringify(debugResult.value, null, 2) : '')
+const debugOutputStr = computed(() => {
+  if (!debugResult.value) return ''
+  const out = debugResult.value.output || debugResult.value.outputVariables || debugResult.value.result
+  return out ? JSON.stringify(out, null, 2) : JSON.stringify(debugResult.value, null, 2)
+})
+
+function getLogSeq(log: any, idx: any): number {
+  const n = parseInt(log.sortNum)
+  return isNaN(n) ? (Number(idx) + 1) : n
+}
+
+function showNodeDebugDetail(nodeKey: string) {
+  const log = debugNodeOutput.value[nodeKey]
+  if (!log) return
+  nodeDebugDetailKey.value = nodeKey
+  nodeDebugInputStr.value = log.inputSnapshot ? JSON.stringify(log.inputSnapshot, null, 2) : (log.inputVariables ? JSON.stringify(log.inputVariables, null, 2) : '{}')
+  nodeDebugOutputStr.value = log.outputSnapshot ? JSON.stringify(log.outputSnapshot, null, 2) : (log.outputVariables ? JSON.stringify(log.outputVariables, null, 2) : '{}')
+  nodeDebugDetailStr.value = JSON.stringify(log, null, 2)
+  nodeDebugDetailVisible.value = true
+}
+
+function clearDebugHighlight() {
+  debugNodeStatus.value = {}
+  debugNodeOutput.value = {}
+  // 刷新节点以清除高亮
+  vfNodes.value = vfNodes.value.map(n => ({ ...n }))
+}
 
 const dataTypes = ['string', 'integer', 'double', 'boolean', 'object', 'array']
 
 const selectedNode = computed(() => businessNodes.value.find(n => n.key === selectedNodeKey.value) || null)
+const selectedEdgeInfo = computed(() => selectedEdgeId.value ? vfEdges.value.find(e => e.id === selectedEdgeId.value) : null)
 const hasStart = computed(() => businessNodes.value.some(n => n.elementType === 'START'))
 const hasEnd = computed(() => businessNodes.value.some(n => n.elementType === 'END'))
 const otherNodes = computed(() => businessNodes.value.filter(n => n.key !== selectedNodeKey.value))
@@ -564,19 +766,51 @@ watch(selectedNode, (node) => {
   }
 })
 
+// ====== 键盘事件 ======
+function onDeleteKey(e: KeyboardEvent) {
+  // 如果焦点在输入框/文本域里，不触发删除
+  const tag = (e.target as HTMLElement)?.tagName?.toLowerCase()
+  if (tag === 'input' || tag === 'textarea') return
+
+  if (selectedEdgeId.value) {
+    removeEdge(selectedEdgeId.value)
+  } else if (selectedNodeKey.value) {
+    removeNode(selectedNodeKey.value)
+  }
+}
+
+// 点击画布空白处取消选中
+function onPaneClick() {
+  selectedNodeKey.value = null
+  selectedEdgeId.value = null
+}
+
+// 让容器获取焦点（以便接收键盘事件）
+onMounted(async () => {
+  await Promise.all([loadFlowInfo(), loadSuiteApis(), loadDataSources()])
+  nextTick(() => { containerRef.value?.focus() })
+})
+
 // ====== VueFlow 事件 ======
 function onVfNodeClick(evt: NodeMouseEvent) {
+  selectedEdgeId.value = null
   selectNodeByKey(evt.node.data.nodeKey)
+  // 聚焦容器以接收键盘事件
+  nextTick(() => { containerRef.value?.focus() })
 }
-function onVfEdgeClick(_evt: EdgeMouseEvent) {
-  // 点击边时可以删除（预留）
+
+function onVfEdgeClick(evt: EdgeMouseEvent) {
+  selectedNodeKey.value = null
+  selectedEdgeId.value = evt.edge.id
+  nextTick(() => { containerRef.value?.focus() })
 }
+
 function onVfConnect(params: Connection) {
+  takeSnapshot()
   const srcKey = vfNodes.value.find((n: any) => n.id === params.source)?.data?.nodeKey
   const tgtKey = vfNodes.value.find((n: any) => n.id === params.target)?.data?.nodeKey
   if (!srcKey || !tgtKey) return
 
-  // 更新业务节点的 outgoings/incomings
   const srcNode = businessNodes.value.find(n => n.key === srcKey)
   const tgtNode = businessNodes.value.find(n => n.key === tgtKey)
   if (!srcNode || !tgtNode) return
@@ -586,13 +820,11 @@ function onVfConnect(params: Connection) {
   if (!srcNode.outgoings.includes(tgtKey)) srcNode.outgoings.push(tgtKey)
   if (!tgtNode.incomings.includes(srcKey)) tgtNode.incomings.push(srcKey)
 
-  // 如果源节点是CONDITION，自动填入第一个没有outgoing的分支
   if (srcNode.elementType === 'CONDITION' && srcNode.conditions) {
     const emptyCond = srcNode.conditions.find((c: any) => !c.outgoing)
     if (emptyCond) emptyCond.outgoing = tgtKey
   }
 
-  // 添加边到VueFlow
   const edgeId = `e-${params.source}-${params.target}`
   if (!vfEdges.value.find(e => e.id === edgeId)) {
     vfEdges.value.push({
@@ -605,12 +837,12 @@ function onVfConnect(params: Connection) {
     })
   }
 }
-function onVfEdgeUpdate(_evt: { edge: any; connection: any }) {
-  // 边更新（预留）
-}
+
+function onVfEdgeUpdate(_evt: { edge: any; connection: any }) {}
 
 function selectNodeByKey(key: string) {
   selectedNodeKey.value = key
+  selectedEdgeId.value = null
 }
 
 // ====== 业务节点 → VueFlow 节点转换 ======
@@ -639,9 +871,7 @@ function buildVfEdge(srcKey: string, tgtKey: string) {
   }
 }
 
-// 将业务节点数组同步到VueFlow
 function syncBusinessNodesToVf() {
-  // 计算布局（如果没有保存位置）
   const cols = 1
   const xBase = 100
   const yBase = 60
@@ -658,7 +888,6 @@ function syncBusinessNodesToVf() {
     newVfNodes.push(buildVfNode(bNode, x, y))
   })
 
-  // 从 outgoings 构建边
   businessNodes.value.forEach(bNode => {
     const outs: string[] = bNode.outgoings || []
     outs.forEach((tgt: string) => {
@@ -668,7 +897,6 @@ function syncBusinessNodesToVf() {
         newVfEdges.push(buildVfEdge(bNode.key, tgt))
       }
     })
-    // CONDITION 分支也要建边
     if (bNode.elementType === 'CONDITION' && bNode.conditions) {
       bNode.conditions.forEach((c: any) => {
         if (c.outgoing) {
@@ -692,7 +920,6 @@ function syncBusinessNodesToVf() {
   vfEdges.value = newVfEdges
 }
 
-// 从VueFlow节点位置反同步回业务节点
 function syncVfPositionsToBusinessNodes() {
   vfNodes.value.forEach(vfn => {
     const bNode = businessNodes.value.find(n => n.key === vfn.id)
@@ -703,13 +930,12 @@ function syncVfPositionsToBusinessNodes() {
   })
 }
 
-// 同步标签到VueFlow节点data
 function syncVfNodeLabel(bNode: any) {
   const vfn = vfNodes.value.find(n => n.id === bNode.key)
   if (vfn) vfn.data = { ...vfn.data, label: bNode.label }
 }
 
-// ====== 自动布局（自动排成整齐竖排） ======
+// ====== 自动布局 ======
 function autoLayout() {
   const xBase = 200
   const yBase = 60
@@ -723,10 +949,6 @@ function autoLayout() {
 }
 
 // ====== 数据加载 ======
-onMounted(async () => {
-  await Promise.all([loadFlowInfo(), loadSuiteApis(), loadDataSources()])
-})
-
 async function loadFlowInfo() {
   try {
     const res: any = await request.get(`/flow/definition/infoByKey/${flowKey}`)
@@ -747,7 +969,6 @@ async function loadFlowInfo() {
       }
       debugParams.value = JSON.stringify(defaultObj, null, 2)
     }
-    // 同步到 VueFlow
     await nextTick()
     syncBusinessNodesToVf()
   } catch (e) {
@@ -804,8 +1025,8 @@ function nodeTypeName(type: string) {
 }
 
 function addNode(type: string) {
+  takeSnapshot()
   const key = `${type.toLowerCase()}_${Date.now()}`
-  // 新节点放在最后一个节点右边，或默认位置
   const lastVfNode = vfNodes.value[vfNodes.value.length - 1]
   const x = lastVfNode ? lastVfNode.position.x + 220 : 200
   const y = lastVfNode ? lastVfNode.position.y : 200
@@ -831,14 +1052,12 @@ function addNode(type: string) {
   }
 
   businessNodes.value.push(bNode)
-
-  // 同步到VueFlow
   vfNodes.value.push(buildVfNode(bNode, x, y))
-
   selectNodeByKey(key)
 }
 
 function removeNode(key: string) {
+  takeSnapshot()
   businessNodes.value = businessNodes.value.filter(n => n.key !== key)
   if (selectedNodeKey.value === key) selectedNodeKey.value = null
   businessNodes.value.forEach(n => {
@@ -846,9 +1065,28 @@ function removeNode(key: string) {
     n.incomings = (n.incomings || []).filter((k: string) => k !== key)
     if (n.conditions) n.conditions.forEach((c: any) => { if (c.outgoing === key) c.outgoing = '' })
   })
-  // 同步到VueFlow
   vfNodes.value = vfNodes.value.filter(n => n.id !== key)
   vfEdges.value = vfEdges.value.filter(e => e.source !== key && e.target !== key)
+  ElMessage.success(`节点 ${key} 已删除`)
+}
+
+function removeEdge(edgeId: string) {
+  if (!edgeId) return
+  takeSnapshot()
+  const edge = vfEdges.value.find(e => e.id === edgeId)
+  if (edge) {
+    const srcNode = businessNodes.value.find(n => n.key === edge.source)
+    const tgtNode = businessNodes.value.find(n => n.key === edge.target)
+    if (srcNode) srcNode.outgoings = (srcNode.outgoings || []).filter((k: string) => k !== edge.target)
+    if (tgtNode) tgtNode.incomings = (tgtNode.incomings || []).filter((k: string) => k !== edge.source)
+    // CONDITION 分支的 outgoing 也清除
+    if (srcNode?.elementType === 'CONDITION' && srcNode.conditions) {
+      srcNode.conditions.forEach((c: any) => { if (c.outgoing === edge.target) c.outgoing = '' })
+    }
+  }
+  vfEdges.value = vfEdges.value.filter(e => e.id !== edgeId)
+  selectedEdgeId.value = null
+  ElMessage.success('连线已删除')
 }
 
 function onApiSelect(val: any[]) {
@@ -944,19 +1182,14 @@ function varTypeColor(type: string) { return { INPUT: 'success', OUTPUT: 'warnin
 // ====== 保存/部署/调试 ======
 async function saveFlow() {
   if (!flowInfo.value?.id) return ElMessage.error('流程信息未加载')
-  // 保存前先把VueFlow位置同步回业务节点
   syncVfPositionsToBusinessNodes()
-  // 把VueFlow的边同步回业务节点的 outgoings/incomings
   syncVfEdgesToBusinessNodes()
-  // 序列化业务节点（去掉 _x _y 字段可选保留，此处保留以便下次还原位置）
   await request.put('/flow/definition/save', { id: flowInfo.value.id, flowContent: JSON.stringify(businessNodes.value) })
   ElMessage.success('保存成功')
 }
 
 function syncVfEdgesToBusinessNodes() {
-  // 重置所有节点的 outgoings/incomings
   businessNodes.value.forEach(n => { n.outgoings = []; n.incomings = [] })
-  // 从VueFlow边重建
   vfEdges.value.forEach(edge => {
     const srcKey = edge.source
     const tgtKey = edge.target
@@ -965,8 +1198,6 @@ function syncVfEdgesToBusinessNodes() {
     if (srcNode && !srcNode.outgoings.includes(tgtKey)) srcNode.outgoings.push(tgtKey)
     if (tgtNode && !tgtNode.incomings.includes(srcKey)) tgtNode.incomings.push(srcKey)
   })
-  // CONDITION分支的 outgoing 保持在conditions里，不需要额外处理
-  // （outgoings已在onVfConnect里同步了）
 }
 
 async function deployFlow() {
@@ -975,18 +1206,47 @@ async function deployFlow() {
   ElMessage.success('部署成功')
 }
 
-function openDebug() { debugVisible.value = true; debugResult.value = null }
+function openDebug() {
+  debugVisible.value = true
+  debugResult.value = null
+  debugTab.value = 'timeline'
+}
 
 async function runDebug() {
   debugLoading.value = true
+  // 清除旧的高亮
+  debugNodeStatus.value = {}
+  debugNodeOutput.value = {}
   try {
     let params = {}
     try { params = JSON.parse(debugParams.value) } catch { ElMessage.error('参数JSON格式错误'); return }
     const res: any = await request.post(`/flow/definition/debug/${flowKey}`, { params })
     debugResult.value = res.data
+
+    // 解析 nodeLogs 并更新节点高亮
+    const nodeLogs: any[] = res.data?.nodeLogs || []
+    const newStatus: Record<string, string> = {}
+    const newOutput: Record<string, any> = {}
+    for (const log of nodeLogs) {
+      const k = log.nodeKey
+      if (!k) continue
+      newStatus[k] = log.status === 'SUCCESS' ? 'success' : 'fail'
+      newOutput[k] = log
+    }
+    debugNodeStatus.value = newStatus
+    debugNodeOutput.value = newOutput
+
+    // 刷新节点（让 class 重新计算）
+    vfNodes.value = vfNodes.value.map(n => ({ ...n }))
+
+    // 自动切换到时间轴
+    if (nodeLogs.length) debugTab.value = 'timeline'
+    else debugTab.value = 'output'
   } catch (e: any) {
     debugResult.value = { success: false, errorMessage: e.message || '请求失败' }
-  } finally { debugLoading.value = false }
+  } finally {
+    debugLoading.value = false
+  }
 }
 </script>
 
@@ -996,6 +1256,7 @@ async function runDebug() {
   flex-direction: column;
   height: 100vh;
   background: #1a1a2e;
+  outline: none; /* 隐藏 tabindex focus 轮廓 */
 }
 
 .toolbar {
@@ -1051,6 +1312,29 @@ async function runDebug() {
 }
 .flow-hint p { font-size: 14px; margin-top: 8px; }
 
+/* 删除提示 */
+.delete-hint {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,0.65);
+  color: #fff;
+  padding: 6px 16px;
+  border-radius: 20px;
+  font-size: 13px;
+  pointer-events: none;
+  z-index: 20;
+  white-space: nowrap;
+}
+.delete-hint kbd {
+  background: rgba(255,255,255,0.2);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 12px;
+  border: 1px solid rgba(255,255,255,0.3);
+}
+
 /* 右侧属性面板 */
 .right-panel {
   width: 340px;
@@ -1100,6 +1384,34 @@ async function runDebug() {
 .condition-item { background: #fffbe6; border: 1px solid #ffe58f; border-radius: 6px; padding: 8px; margin-bottom: 8px; }
 
 .code-editor :deep(textarea) { font-family: 'Consolas', 'Monaco', monospace !important; font-size: 12px !important; line-height: 1.6; background: #1e1e1e !important; color: #d4d4d4 !important; }
+
+/* 调试时间轴 */
+.debug-timeline-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s;
+  border: 1px solid transparent;
+}
+.debug-timeline-item:hover { background: #f0f2f5; }
+.dtl-success { border-left: 3px solid #52c41a; background: #f6ffed; }
+.dtl-fail    { border-left: 3px solid #ff4d4f; background: #fff1f0; }
+.dtl-seq {
+  width: 22px; height: 22px; border-radius: 50%; background: #666; color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: bold; flex-shrink: 0; margin-top: 2px;
+}
+.dtl-success .dtl-seq { background: #52c41a; }
+.dtl-fail .dtl-seq { background: #ff4d4f; }
+.dtl-body { flex: 1; }
+.dtl-header { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.dtl-icon { font-size: 14px; }
+.dtl-key { font-weight: 600; color: #333; }
+.dtl-error { font-size: 12px; color: #ff4d4f; margin-top: 4px; word-break: break-all; }
 </style>
 
 <!-- 自定义节点全局样式（非scoped） -->
@@ -1124,6 +1436,57 @@ async function runDebug() {
 }
 .jg-node:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.2); }
 .jg-node.jg-selected { border-color: #1890ff !important; box-shadow: 0 0 0 3px rgba(24,144,255,0.25); }
+
+/* 调试高亮状态 */
+.jg-node.jg-debug-success {
+  border-color: #52c41a !important;
+  box-shadow: 0 0 0 3px rgba(82,196,26,0.3), 0 0 12px rgba(82,196,26,0.4) !important;
+}
+.jg-node.jg-debug-fail {
+  border-color: #ff4d4f !important;
+  box-shadow: 0 0 0 3px rgba(255,77,79,0.3), 0 0 12px rgba(255,77,79,0.4) !important;
+}
+.jg-node.jg-debug-running {
+  border-color: #faad14 !important;
+  box-shadow: 0 0 0 3px rgba(250,173,20,0.3) !important;
+  animation: pulse-running 1s infinite;
+}
+@keyframes pulse-running {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(250,173,20,0.3); }
+  50% { box-shadow: 0 0 0 6px rgba(250,173,20,0.5); }
+}
+
+/* 调试状态角标 */
+.jg-debug-badge {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: bold;
+  z-index: 10;
+}
+.jg-debug-success .jg-debug-badge { background: #52c41a; color: #fff; }
+.jg-debug-fail .jg-debug-badge { background: #ff4d4f; color: #fff; }
+.jg-debug-running .jg-debug-badge { background: #faad14; color: #fff; }
+
+/* 调试输出按钮 */
+.jg-debug-output {
+  font-size: 10px;
+  color: #1890ff;
+  margin-top: 3px;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: rgba(24,144,255,0.08);
+}
+.jg-debug-output:hover { background: rgba(24,144,255,0.18); }
 
 .jg-icon { font-size: 20px; margin-bottom: 4px; }
 .jg-name { font-size: 12px; font-weight: 600; color: #333; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; }
@@ -1159,4 +1522,10 @@ async function runDebug() {
   color: #333;
 }
 .vue-flow__controls-button:hover { background: #e6f4ff; }
+
+/* 选中的边高亮 */
+.vue-flow__edge.selected .vue-flow__edge-path {
+  stroke: #ff4d4f !important;
+  stroke-width: 3px !important;
+}
 </style>
