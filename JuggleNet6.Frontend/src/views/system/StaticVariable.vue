@@ -139,7 +139,7 @@ const rules = {
 const loadList = async () => {
   loading.value = true
   try {
-    const res = await request.get('/api/system/static-var/list')
+    const res = await request.get('/system/static-var/list')
     if (res.data.code === 200) varList.value = res.data.data
   } finally {
     loading.value = false
@@ -158,7 +158,7 @@ const openEdit = (row: any) => {
 
 const submitForm = async () => {
   await formRef.value.validate()
-  const api = editForm.value.id ? '/api/system/static-var/update' : '/api/system/static-var/add'
+  const api = editForm.value.id ? '/system/static-var/update' : '/system/static-var/add'
   const method = editForm.value.id ? 'put' : 'post'
   const res = await (request as any)[method](api, editForm.value)
   if (res.data.code === 200) {
@@ -171,13 +171,13 @@ const submitForm = async () => {
 }
 
 const quickSetValue = async (row: any) => {
-  const res = await request.put(`/api/system/static-var/setValue/${row.id}`, { value: row.value })
+  const res = await request.put(`/system/static-var/setValue/${row.id}`, { value: row.value })
   if (res.data.code === 200) ElMessage.success('值已更新')
 }
 
 const resetValue = async (row: any) => {
   await ElMessageBox.confirm('将重置为默认值，确认吗?', '提示', { type: 'warning' })
-  const res = await request.put(`/api/system/static-var/reset/${row.id}`, {})
+  const res = await request.put(`/system/static-var/reset/${row.id}`, {})
   if (res.data.code === 200) {
     ElMessage.success('已重置')
     loadList()
@@ -186,7 +186,7 @@ const resetValue = async (row: any) => {
 
 const deleteVar = async (id: number) => {
   await ElMessageBox.confirm('确定删除该变量吗?', '提示', { type: 'warning' })
-  const res = await request.delete(`/api/system/static-var/${id}`)
+  const res = await request.delete(`/system/static-var/${id}`)
   if (res.data.code === 200) {
     ElMessage.success('删除成功')
     loadList()

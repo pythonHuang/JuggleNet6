@@ -173,7 +173,7 @@ const loadList = async (page?: number) => {
   if (page) pageNum.value = page
   loading.value = true
   try {
-    const res = await request.post('/api/flow/log/page', {
+    const res = await request.post('/flow/log/page', {
       flowKey: searchForm.value.flowKey || undefined,
       status: searchForm.value.status || undefined,
       startDate: dateRange.value?.[0] || undefined,
@@ -197,7 +197,7 @@ const resetSearch = () => {
 }
 
 const viewDetail = async (row: any) => {
-  const res = await request.get(`/api/flow/log/detail/${row.id}`)
+  const res = await request.get(`/flow/log/detail/${row.id}`)
   if (res.data.code === 200) {
     detailData.value = res.data.data
     detailDrawer.value = true
@@ -206,7 +206,7 @@ const viewDetail = async (row: any) => {
 
 const deleteLog = async (id: number) => {
   await ElMessageBox.confirm('确定删除该条日志吗?', '提示', { type: 'warning' })
-  await request.delete(`/api/flow/log/${id}`)
+  await request.delete(`/flow/log/${id}`)
   ElMessage.success('删除成功')
   loadList()
 }
