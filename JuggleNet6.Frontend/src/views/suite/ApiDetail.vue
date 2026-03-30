@@ -48,6 +48,7 @@
                 <el-option value="integer" label="integer" />
                 <el-option value="double" label="double" />
                 <el-option value="boolean" label="boolean" />
+                <el-option value="date" label="date（日期）" />
                 <el-option value="json" label="json（JSON对象）" />
                 <el-option value="object" label="object（对象类型）" />
                 <el-option value="array" label="array（对象数组）" />
@@ -107,6 +108,7 @@
                 <el-option value="integer" label="integer" />
                 <el-option value="double" label="double" />
                 <el-option value="boolean" label="boolean" />
+                <el-option value="date" label="date（日期）" />
                 <el-option value="json" label="json（JSON对象）" />
                 <el-option value="object" label="object（对象类型）" />
                 <el-option value="array" label="array（对象数组）" />

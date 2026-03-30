@@ -755,6 +755,7 @@ const dataTypes = [
   { value: 'integer', label: 'integer' },
   { value: 'double',  label: 'double' },
   { value: 'boolean', label: 'boolean' },
+  { value: 'date',    label: 'date（日期）' },
   { value: 'json',    label: 'json（JSON对象）' },
   { value: 'object',  label: 'object（对象类型）' },
   { value: 'array',   label: 'array（对象数组）' },
