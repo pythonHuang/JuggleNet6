@@ -112,11 +112,74 @@ builder.Services.AddCors(opts =>
 // ==================== 应用构建 ====================
 var app = builder.Build();
 
-// 自动迁移数据库
+// 自动迁移数据库：EnsureCreated 仅在首次创建时建表
+// 对于已存在的数据库，补建后续迭代新增的表（幂等 CREATE TABLE IF NOT EXISTS）
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<JuggleDbContext>();
     db.Database.EnsureCreated();
+
+    // 补建迭代四新增的三张表（若已存在则跳过）
+    db.Database.ExecuteSqlRaw(@"
+CREATE TABLE IF NOT EXISTS t_flow_log (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    deleted      INTEGER NOT NULL DEFAULT 0,
+    created_at   TEXT,
+    created_by   TEXT,
+    updated_at   TEXT,
+    updated_by   TEXT,
+    flow_key     TEXT,
+    flow_name    TEXT,
+    version      INTEGER,
+    trigger_type TEXT,
+    status       TEXT,
+    start_time   TEXT,
+    end_time     TEXT,
+    cost_ms      INTEGER,
+    error_message TEXT,
+    input_json   TEXT,
+    output_json  TEXT
+);");
+
+    db.Database.ExecuteSqlRaw(@"
+CREATE TABLE IF NOT EXISTS t_flow_node_log (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    deleted         INTEGER NOT NULL DEFAULT 0,
+    created_at      TEXT,
+    created_by      TEXT,
+    updated_at      TEXT,
+    updated_by      TEXT,
+    flow_log_id     INTEGER,
+    node_key        TEXT,
+    node_label      TEXT,
+    node_type       TEXT,
+    seq_no          INTEGER,
+    status          TEXT,
+    start_time      TEXT,
+    end_time        TEXT,
+    cost_ms         INTEGER,
+    input_snapshot  TEXT,
+    output_snapshot TEXT,
+    detail          TEXT,
+    error_message   TEXT
+);");
+
+    db.Database.ExecuteSqlRaw(@"
+CREATE TABLE IF NOT EXISTS t_static_variable (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    deleted       INTEGER NOT NULL DEFAULT 0,
+    created_at    TEXT,
+    created_by    TEXT,
+    updated_at    TEXT,
+    updated_by    TEXT,
+    var_code      TEXT NOT NULL,
+    var_name      TEXT,
+    data_type     TEXT,
+    value         TEXT,
+    default_value TEXT,
+    description   TEXT,
+    group_name    TEXT
+);");
 }
 
 if (app.Environment.IsDevelopment())
