@@ -340,3 +340,15 @@ ASALocalRun/
 healthchecksdb
 /02.系统编码/amimtct-web/amimtct
 /02.系统编码/v2/amimtct-webv2/amimtct
+
+# SQLite 数据库文件（运行时生成，不入库）
+*.db
+*.db-shm
+*.db-wal
+
+# 前端构建产物（集成到后端 wwwroot，不入库）
+wwwroot/
+
+# 前端依赖
+node_modules/
+dist/

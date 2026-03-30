@@ -171,3 +171,13 @@ Copy-Item dist\* ..\Juggle.Api\wwwroot\ -Recurse -Force
 - [设计文档](./DesignDoc.md) - 系统详细设计说明
 - [后端 README](./Juggle.Api/README.md) - 后端项目说明
 - [前端 README](./JuggleNet6.Frontend/README.md) - 前端项目说明
+
+---
+
+## 致谢
+
+本项目基于 [Juggle](https://github.com/somta/Juggle) 原始 Java 版本的设计思路与架构，使用 .NET 8 + Vue3 + SQLite 进行重构实现。
+
+感谢 [@somta](https://github.com/somta) 及原项目团队提供的思路与支持！
+
+> 原项目：https://github.com/somta/Juggle
