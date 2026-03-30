@@ -9,6 +9,7 @@ namespace Juggle.Domain.Engine.NodeExecutors;
 /// targetType 支持：
 ///   (默认)         — 流程变量
 ///   STATIC        — 写入全局静态变量（执行后持久化）
+///   OUTPUT        — 写入输出参数（流程执行结果）
 /// </summary>
 public class AssignNodeExecutor : INodeExecutor
 {
@@ -38,10 +39,20 @@ public class AssignNodeExecutor : INodeExecutor
 
                 // ==== 写入目标 ====
                 var tgtType = (rule.TargetType ?? "VARIABLE").ToUpper();
-                if (tgtType == "STATIC")
-                    context.SetStaticVariable(rule.Target, value?.ToString());
-                else
-                    context.SetVariable(rule.Target, value);
+                switch (tgtType)
+                {
+                    case "STATIC":
+                        context.SetStaticVariable(rule.Target, value?.ToString());
+                        break;
+                    case "OUTPUT":
+                        // 写入输出参数
+                        context.SetOutputParameter(rule.Target, value);
+                        break;
+                    default:
+                        // VARIABLE 或其他未知类型，默认写入流程变量
+                        context.SetVariable(rule.Target, value);
+                        break;
+                }
             }
         }
 

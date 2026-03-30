@@ -95,7 +95,7 @@ public class FillRule
     [JsonPropertyName("target")]
     public string Target { get; set; } = "";
 
-    /// <summary>INPUT_PARAM / OUTPUT_PARAM / HEADER / VARIABLE</summary>
+    /// <summary>INPUT_PARAM / OUTPUT_PARAM / HEADER / VARIABLE / OUTPUT（流程输出参数）</summary>
     [JsonPropertyName("targetType")]
     public string TargetType { get; set; } = "INPUT_PARAM";
 }
@@ -162,4 +162,12 @@ public class MysqlConfig
     /// <summary>影响行数写入的变量名（UPDATE/INSERT/DELETE 类型有效）</summary>
     [JsonPropertyName("affectedRowsVariable")]
     public string? AffectedRowsVariable { get; set; }
+
+    /// <summary>查询结果目标类型：VARIABLE（变量）/ OUTPUT（输出参数）</summary>
+    [JsonPropertyName("outputTargetType")]
+    public string? OutputTargetType { get; set; }
+
+    /// <summary>影响行数目标类型：VARIABLE（变量）/ OUTPUT（输出参数）</summary>
+    [JsonPropertyName("affectedTargetType")]
+    public string? AffectedTargetType { get; set; }
 }

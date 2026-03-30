@@ -29,6 +29,19 @@ public class FlowContext
     {
         return Variables.TryGetValue(key, out var val) ? val : null;
     }
+    
+    /// <summary>设置输出参数值</summary>
+    public void SetOutputParameter(string paramCode, object? value)
+    {
+        // 输出参数也存储在 Variables 中，但以 output_ 前缀区分
+        Variables[$"output_{paramCode}"] = value;
+    }
+    
+    /// <summary>获取输出参数值</summary>
+    public object? GetOutputParameter(string paramCode)
+    {
+        return Variables.TryGetValue($"output_{paramCode}", out var val) ? val : null;
+    }
 
     // ========== 静态变量操作 ==========
 

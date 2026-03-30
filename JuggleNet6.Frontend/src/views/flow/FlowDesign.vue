@@ -211,8 +211,17 @@
             <div v-for="(rule, i) in selectedNode.method?.outputFillRules" :key="'o'+i" class="fill-rule-row">
               <el-input v-model="rule.source" placeholder="响应字段path" size="small" style="flex:1" />
               <span class="arrow-icon">→</span>
-              <el-select v-model="rule.target" placeholder="目标变量" size="small" style="width:46%">
-                <el-option v-for="v in allVariables" :key="v.variableCode" :value="v.variableCode" :label="v.variableCode" />
+              <el-select v-model="rule.targetType" size="small" style="width:80px;flex-shrink:0">
+                <el-option value="VARIABLE" label="变量" />
+                <el-option value="OUTPUT" label="出参" />
+              </el-select>
+              <el-select v-model="rule.target" :placeholder="rule.targetType === 'VARIABLE' ? '选择变量' : '选择输出参数'" size="small" style="width:46%">
+                <template v-if="rule.targetType === 'VARIABLE'">
+                  <el-option v-for="v in allVariables" :key="v.variableCode" :value="v.variableCode" :label="v.variableCode" />
+                </template>
+                <template v-else-if="rule.targetType === 'OUTPUT'">
+                  <el-option v-for="p in flowOutputParams" :key="p.paramCode" :value="p.paramCode" :label="`${p.paramName} (${p.paramCode})`" />
+                </template>
               </el-select>
               <el-button size="small" icon="Delete" circle type="danger" @click="selectedNode.method!.outputFillRules.splice(i, 1)" />
             </div>
@@ -227,19 +236,42 @@
             </div>
             <div v-for="(rule, i) in selectedNode.assignRules" :key="i" class="assign-rule">
               <div class="assign-row">
-                <el-select v-model="rule.sourceType" size="small" style="width:72px;flex-shrink:0">
+                <el-select v-model="rule.sourceType" size="small" style="width:80px;flex-shrink:0">
                   <el-option value="CONSTANT" label="常量" />
                   <el-option value="VARIABLE" label="变量" />
+                  <el-option value="STATIC" label="静态" />
                 </el-select>
-                <el-input v-if="rule.sourceType === 'CONSTANT'" v-model="rule.source" placeholder="常量值" size="small" style="flex:1" />
-                <el-select v-else v-model="rule.source" placeholder="来源变量" size="small" style="flex:1">
-                  <el-option v-for="v in allVariables" :key="v.variableCode" :value="v.variableCode" :label="v.variableCode" />
-                </el-select>
+                <template v-if="rule.sourceType === 'CONSTANT'">
+                  <el-input v-model="rule.source" placeholder="常量值" size="small" style="flex:1" />
+                </template>
+                <template v-else-if="rule.sourceType === 'VARIABLE'">
+                  <el-select v-model="rule.source" placeholder="选择变量" size="small" style="flex:1">
+                    <el-option v-for="v in allVariables" :key="v.variableCode" :value="v.variableCode" :label="v.variableCode" />
+                  </el-select>
+                </template>
+                <template v-else-if="rule.sourceType === 'STATIC'">
+                  <el-select v-model="rule.source" placeholder="选择静态变量" size="small" style="flex:1">
+                    <el-option v-for="s in staticVariables" :key="s.varCode" :value="s.varCode" :label="`${s.varName} (${s.varCode})`" />
+                  </el-select>
+                </template>
               </div>
               <div class="assign-row" style="margin-top:4px">
                 <span style="font-size:12px;color:#666;width:72px;flex-shrink:0">→ 赋值给</span>
-                <el-select v-model="rule.target" placeholder="目标变量" size="small" style="flex:1">
-                  <el-option v-for="v in allVariables" :key="v.variableCode" :value="v.variableCode" :label="v.variableCode" />
+                <el-select v-model="rule.targetType" size="small" style="width:80px;flex-shrink:0">
+                  <el-option value="VARIABLE" label="变量" />
+                  <el-option value="OUTPUT" label="出参" />
+                  <el-option value="STATIC" label="静态" />
+                </el-select>
+                <el-select v-model="rule.target" :placeholder="getTargetPlaceholder(rule.targetType)" size="small" style="flex:1">
+                  <template v-if="rule.targetType === 'VARIABLE'">
+                    <el-option v-for="v in allVariables" :key="v.variableCode" :value="v.variableCode" :label="v.variableCode" />
+                  </template>
+                  <template v-else-if="rule.targetType === 'OUTPUT'">
+                    <el-option v-for="p in flowOutputParams" :key="p.paramCode" :value="p.paramCode" :label="`${p.paramName} (${p.paramCode})`" />
+                  </template>
+                  <template v-else-if="rule.targetType === 'STATIC'">
+                    <el-option v-for="s in staticVariables" :key="s.varCode" :value="s.varCode" :label="`${s.varName} (${s.varCode})`" />
+                  </template>
                 </el-select>
                 <el-select v-model="rule.dataType" size="small" style="width:72px;flex-shrink:0">
                   <el-option value="string" label="string" />
@@ -296,16 +328,38 @@
                 placeholder="SELECT * FROM table WHERE id = ${input_id}" class="code-editor" />
             </div>
             <div class="prop-item" v-if="selectedNode.mysqlConfig.operationType === 'QUERY'">
-              <label>查询结果写入变量</label>
-              <el-select v-model="selectedNode.mysqlConfig.outputVariable" placeholder="选择目标变量" size="small" style="width:100%" clearable>
-                <el-option v-for="v in allVariables" :key="v.variableCode" :value="v.variableCode" :label="v.variableCode" />
-              </el-select>
+              <label>查询结果写入</label>
+              <div style="display:flex;gap:4px">
+                <el-select v-model="selectedNode.mysqlConfig.outputTargetType" size="small" style="width:80px;flex-shrink:0">
+                  <el-option value="VARIABLE" label="变量" />
+                  <el-option value="OUTPUT" label="出参" />
+                </el-select>
+                <el-select v-model="selectedNode.mysqlConfig.outputVariable" :placeholder="selectedNode.mysqlConfig.outputTargetType === 'VARIABLE' ? '选择变量' : '选择输出参数'" size="small" style="flex:1" clearable>
+                  <template v-if="selectedNode.mysqlConfig.outputTargetType === 'VARIABLE'">
+                    <el-option v-for="v in allVariables" :key="v.variableCode" :value="v.variableCode" :label="v.variableCode" />
+                  </template>
+                  <template v-else-if="selectedNode.mysqlConfig.outputTargetType === 'OUTPUT'">
+                    <el-option v-for="p in flowOutputParams" :key="p.paramCode" :value="p.paramCode" :label="`${p.paramName} (${p.paramCode})`" />
+                  </template>
+                </el-select>
+              </div>
             </div>
             <div class="prop-item" v-else>
-              <label>影响行数写入变量</label>
-              <el-select v-model="selectedNode.mysqlConfig.affectedRowsVariable" placeholder="可选" size="small" style="width:100%" clearable>
-                <el-option v-for="v in allVariables" :key="v.variableCode" :value="v.variableCode" :label="v.variableCode" />
-              </el-select>
+              <label>影响行数写入</label>
+              <div style="display:flex;gap:4px">
+                <el-select v-model="selectedNode.mysqlConfig.affectedTargetType" size="small" style="width:80px;flex-shrink:0">
+                  <el-option value="VARIABLE" label="变量" />
+                  <el-option value="OUTPUT" label="出参" />
+                </el-select>
+                <el-select v-model="selectedNode.mysqlConfig.affectedRowsVariable" :placeholder="selectedNode.mysqlConfig.affectedTargetType === 'VARIABLE' ? '选择变量' : '选择输出参数'" size="small" style="flex:1" clearable>
+                  <template v-if="selectedNode.mysqlConfig.affectedTargetType === 'VARIABLE'">
+                    <el-option v-for="v in allVariables" :key="v.variableCode" :value="v.variableCode" :label="v.variableCode" />
+                  </template>
+                  <template v-else-if="selectedNode.mysqlConfig.affectedTargetType === 'OUTPUT'">
+                    <el-option v-for="p in flowOutputParams" :key="p.paramCode" :value="p.paramCode" :label="`${p.paramName} (${p.paramCode})`" />
+                  </template>
+                </el-select>
+              </div>
             </div>
           </template>
 
@@ -1129,7 +1183,17 @@ function addHeaderRule() {
 
 function addAssignRule() {
   if (!selectedNode.value?.assignRules) return
-  selectedNode.value.assignRules.push({ source: '', sourceType: 'CONSTANT', target: '', dataType: 'string' })
+  selectedNode.value.assignRules.push({ source: '', sourceType: 'CONSTANT', target: '', targetType: 'VARIABLE', dataType: 'string' })
+}
+
+// 获取赋值目标占位符文本
+function getTargetPlaceholder(targetType: string) {
+  switch (targetType) {
+    case 'VARIABLE': return '选择变量';
+    case 'OUTPUT': return '选择输出参数';
+    case 'STATIC': return '选择静态变量';
+    default: return '选择目标';
+  }
 }
 
 function addCondition() {

@@ -40,13 +40,25 @@ public class MysqlNodeExecutor : INodeExecutor
         {
             var results = await ExecuteQueryAsync(dsInfo, sql);
             if (!string.IsNullOrEmpty(cfg.OutputVariable))
-                context.SetVariable(cfg.OutputVariable, results);
+            {
+                var targetType = cfg.OutputTargetType?.ToUpper() ?? "VARIABLE";
+                if (targetType == "OUTPUT")
+                    context.SetOutputParameter(cfg.OutputVariable, results);
+                else
+                    context.SetVariable(cfg.OutputVariable, results);
+            }
         }
         else
         {
             var affected = await ExecuteNonQueryAsync(dsInfo, sql);
             if (!string.IsNullOrEmpty(cfg.AffectedRowsVariable))
-                context.SetVariable(cfg.AffectedRowsVariable, affected);
+            {
+                var targetType = cfg.AffectedTargetType?.ToUpper() ?? "VARIABLE";
+                if (targetType == "OUTPUT")
+                    context.SetOutputParameter(cfg.AffectedRowsVariable, affected);
+                else
+                    context.SetVariable(cfg.AffectedRowsVariable, affected);
+            }
         }
 
         return node.Outgoings.FirstOrDefault();

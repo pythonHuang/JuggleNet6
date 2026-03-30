@@ -88,11 +88,13 @@ public class MethodNodeExecutor : INodeExecutor
             var responseDoc = JsonSerializer.Deserialize<JsonElement>(responseJson);
             foreach (var rule in method.OutputFillRules)
             {
-                if (rule.TargetType == "VARIABLE")
-                {
-                    var value = ExtractJsonValue(responseDoc, rule.Source);
+                var targetType = rule.TargetType?.ToUpper() ?? "VARIABLE";
+                var value = ExtractJsonValue(responseDoc, rule.Source);
+                
+                if (targetType == "OUTPUT")
+                    context.SetOutputParameter(rule.Target, value);
+                else
                     context.SetVariable(rule.Target, value);
-                }
             }
         }
         catch
