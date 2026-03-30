@@ -10,8 +10,9 @@
         <el-table-column prop="objectName" label="对象名称" />
         <el-table-column prop="objectDesc" label="描述" show-overflow-tooltip />
         <el-table-column prop="createdAt" label="创建时间" width="180" show-overflow-tooltip />
-        <el-table-column label="操作" width="140" fixed="right">
+        <el-table-column label="操作" width="200" fixed="right">
           <template #default="{ row }">
+            <el-button size="small" link type="primary" @click="goAttr(row)">设置属性</el-button>
             <el-button size="small" link @click="openEdit(row)">编辑</el-button>
             <el-button size="small" type="danger" link @click="doDelete(row)">删除</el-button>
           </template>
@@ -41,9 +42,11 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '../../utils/request'
 
+const router = useRouter()
 const loading = ref(false)
 const tableData = ref([])
 const page = reactive({ num: 1, size: 10, total: 0 })
@@ -62,6 +65,10 @@ async function loadData() {
     tableData.value = res.data.records
     page.total = res.data.total
   } finally { loading.value = false }
+}
+
+function goAttr(row: any) {
+  router.push(`/object/attr/${row.id}/${row.objectCode}`)
 }
 
 function openAdd() {

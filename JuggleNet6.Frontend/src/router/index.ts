@@ -17,6 +17,7 @@ const routes = [
       { path: 'suite/api/:suiteCode/:suiteId', component: () => import('../views/suite/ApiList.vue') },
       { path: 'suite/api/:suiteCode/:apiId/detail', component: () => import('../views/suite/ApiDetail.vue') },
       { path: 'object/list', component: () => import('../views/object/ObjectList.vue') },
+      { path: 'object/attr/:objectId/:objectCode', component: () => import('../views/object/ObjectAttrList.vue') },
       { path: 'system/token',      component: () => import('../views/system/TokenList.vue') },
       { path: 'system/datasource', component: () => import('../views/system/DataSourceList.vue') },
       { path: 'system/static-var', component: () => import('../views/system/StaticVariable.vue') },

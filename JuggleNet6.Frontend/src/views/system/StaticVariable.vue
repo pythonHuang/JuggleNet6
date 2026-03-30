@@ -139,8 +139,8 @@ const rules = {
 const loadList = async () => {
   loading.value = true
   try {
-    const res = await request.get('/system/static-var/list')
-    if (res.data.code === 200) varList.value = res.data.data
+    const res: any = await request.get('/system/static-var/list')
+    varList.value = res.data ?? res
   } finally {
     loading.value = false
   }
@@ -160,37 +160,29 @@ const submitForm = async () => {
   await formRef.value.validate()
   const api = editForm.value.id ? '/system/static-var/update' : '/system/static-var/add'
   const method = editForm.value.id ? 'put' : 'post'
-  const res = await (request as any)[method](api, editForm.value)
-  if (res.data.code === 200) {
-    ElMessage.success('保存成功')
-    dialogVisible.value = false
-    loadList()
-  } else {
-    ElMessage.error(res.data.message || '保存失败')
-  }
+  await (request as any)[method](api, editForm.value)
+  ElMessage.success('保存成功')
+  dialogVisible.value = false
+  loadList()
 }
 
 const quickSetValue = async (row: any) => {
-  const res = await request.put(`/system/static-var/setValue/${row.id}`, { value: row.value })
-  if (res.data.code === 200) ElMessage.success('值已更新')
+  await request.put(`/system/static-var/setValue/${row.id}`, { value: row.value })
+  ElMessage.success('值已更新')
 }
 
 const resetValue = async (row: any) => {
   await ElMessageBox.confirm('将重置为默认值，确认吗?', '提示', { type: 'warning' })
-  const res = await request.put(`/system/static-var/reset/${row.id}`, {})
-  if (res.data.code === 200) {
-    ElMessage.success('已重置')
-    loadList()
-  }
+  await request.put(`/system/static-var/reset/${row.id}`, {})
+  ElMessage.success('已重置')
+  loadList()
 }
 
 const deleteVar = async (id: number) => {
   await ElMessageBox.confirm('确定删除该变量吗?', '提示', { type: 'warning' })
-  const res = await request.delete(`/system/static-var/${id}`)
-  if (res.data.code === 200) {
-    ElMessage.success('删除成功')
-    loadList()
-  }
+  await request.delete(`/system/static-var/${id}`)
+  ElMessage.success('删除成功')
+  loadList()
 }
 
 onMounted(() => loadList())

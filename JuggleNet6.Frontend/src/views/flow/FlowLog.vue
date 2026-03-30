@@ -173,7 +173,7 @@ const loadList = async (page?: number) => {
   if (page) pageNum.value = page
   loading.value = true
   try {
-    const res = await request.post('/flow/log/page', {
+    const res: any = await request.post('/flow/log/page', {
       flowKey: searchForm.value.flowKey || undefined,
       status: searchForm.value.status || undefined,
       startDate: dateRange.value?.[0] || undefined,
@@ -181,10 +181,8 @@ const loadList = async (page?: number) => {
       pageNum: pageNum.value,
       pageSize: pageSize.value
     })
-    if (res.data.code === 200) {
-      logList.value = res.data.data.records
-      total.value = res.data.data.total
-    }
+    logList.value = res.data?.records ?? []
+    total.value = res.data?.total ?? 0
   } finally {
     loading.value = false
   }
@@ -197,11 +195,9 @@ const resetSearch = () => {
 }
 
 const viewDetail = async (row: any) => {
-  const res = await request.get(`/flow/log/detail/${row.id}`)
-  if (res.data.code === 200) {
-    detailData.value = res.data.data
-    detailDrawer.value = true
-  }
+  const res: any = await request.get(`/flow/log/detail/${row.id}`)
+  detailData.value = res.data ?? res
+  detailDrawer.value = true
 }
 
 const deleteLog = async (id: number) => {
