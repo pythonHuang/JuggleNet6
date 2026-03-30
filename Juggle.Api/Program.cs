@@ -23,8 +23,9 @@ builder.Services.AddControllers().AddJsonOptions(opts =>
     opts.JsonSerializerOptions.Encoder                     = JavaScriptEncoder.Create(UnicodeRanges.All);
 });
 
-// SQLite + EF Core
-var dbPath = Path.Combine(Directory.GetCurrentDirectory(), "juggle.db");
+// SQLite + EF Core（支持 DB_PATH 环境变量，容器部署时指向挂载卷）
+var dbPath = Environment.GetEnvironmentVariable("DB_PATH")
+          ?? Path.Combine(Directory.GetCurrentDirectory(), "juggle.db");
 builder.Services.AddDbContext<JuggleDbContext>(opts =>
     opts.UseSqlite($"Data Source={dbPath}"));
 
@@ -187,6 +188,12 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+else
+{
+    // 生产/容器环境同样开启 Swagger（可按需关闭）
+    app.UseSwagger();
+    app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "Juggle Net8 API v1"));
+}
 
 app.UseCors();
 app.UseAuthentication();
@@ -197,6 +204,10 @@ app.UseDefaultFiles();
 app.UseStaticFiles();
 
 app.MapControllers();
+
+// 健康检查端点（供 Docker healthcheck / 负载均衡探针使用）
+app.MapGet("/api/health", () => Results.Ok(new { status = "ok", time = DateTime.UtcNow }))
+   .AllowAnonymous();
 
 // SPA fallback（前端路由）
 app.MapFallbackToFile("index.html");

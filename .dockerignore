@@ -1,0 +1,35 @@
+# .NET 构建产物
+**/bin/
+**/obj/
+
+# 前端依赖和构建产物（Docker 内重新构建）
+JuggleNet6.Frontend/node_modules/
+JuggleNet6.Frontend/dist/
+JuggleNet6.Frontend/.vite/
+
+# 后端 wwwroot（Dockerfile 会从 frontend-build 阶段复制）
+Juggle.Api/wwwroot/
+
+# SQLite 数据库文件（不打包进镜像）
+*.db
+*.db-shm
+*.db-wal
+
+# Visual Studio 临时文件
+.vs/
+*.user
+*.suo
+
+# 旧后端（仅供参考，不打包）
+JuggleNet6.Backend/
+
+# Git
+.git/
+.gitignore
+
+# 日志
+*.log
+
+# IDE
+.idea/
+.vscode/
