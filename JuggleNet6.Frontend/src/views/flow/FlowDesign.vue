@@ -370,7 +370,7 @@
             <el-table-column label="类型" width="95">
               <template #default="{ row }">
                 <el-select v-model="row.dataType" size="small" style="width:100%">
-                  <el-option v-for="t in dataTypes" :key="t" :value="t" :label="t" />
+                  <el-option v-for="t in dataTypes" :key="t.value" :value="t.value" :label="t.label" />
                 </el-select>
               </template>
             </el-table-column>
@@ -419,7 +419,7 @@
             <el-table-column label="类型" width="95">
               <template #default="{ row }">
                 <el-select v-model="row.dataType" size="small" style="width:100%">
-                  <el-option v-for="t in dataTypes" :key="t" :value="t" :label="t" />
+                  <el-option v-for="t in dataTypes" :key="t.value" :value="t.value" :label="t.label" />
                 </el-select>
               </template>
             </el-table-column>
@@ -486,7 +486,7 @@
           </el-form-item>
           <el-form-item label="数据类型">
             <el-select v-model="varForm.dataType" style="width:100%">
-              <el-option v-for="t in dataTypes" :key="t" :value="t" :label="t" />
+              <el-option v-for="t in dataTypes" :key="t.value" :value="t.value" :label="t.label" />
             </el-select>
           </el-form-item>
           <el-form-item label="默认值">
@@ -750,7 +750,15 @@ function clearDebugHighlight() {
   vfNodes.value = vfNodes.value.map(n => ({ ...n }))
 }
 
-const dataTypes = ['string', 'integer', 'double', 'boolean', 'object', 'array']
+const dataTypes = [
+  { value: 'string',  label: 'string' },
+  { value: 'integer', label: 'integer' },
+  { value: 'double',  label: 'double' },
+  { value: 'boolean', label: 'boolean' },
+  { value: 'json',    label: 'json（JSON对象）' },
+  { value: 'object',  label: 'object（对象类型）' },
+  { value: 'array',   label: 'array（对象数组）' },
+]
 
 const selectedNode = computed(() => businessNodes.value.find(n => n.key === selectedNodeKey.value) || null)
 const selectedEdgeInfo = computed(() => selectedEdgeId.value ? vfEdges.value.find(e => e.id === selectedEdgeId.value) : null)

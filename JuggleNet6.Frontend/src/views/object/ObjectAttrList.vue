@@ -69,12 +69,13 @@
         </el-form-item>
         <el-form-item label="数据类型" prop="dataType">
           <el-select v-model="editForm.dataType" style="width:100%" @change="onTypeChange">
-            <el-option label="string（字符串）"  value="string" />
-            <el-option label="integer（整数）"   value="integer" />
-            <el-option label="double（浮点数）"  value="double" />
-            <el-option label="boolean（布尔）"   value="boolean" />
-            <el-option label="object（对象）"    value="object" />
-            <el-option label="array（数组）"     value="array" />
+            <el-option label="string（字符串）"   value="string" />
+            <el-option label="integer（整数）"    value="integer" />
+            <el-option label="double（浮点数）"   value="double" />
+            <el-option label="boolean（布尔）"    value="boolean" />
+            <el-option label="json（JSON对象）"   value="json" />
+            <el-option label="object（对象类型）" value="object" />
+            <el-option label="array（对象数组）"  value="array" />
           </el-select>
         </el-form-item>
         <el-form-item label="关联对象" v-if="editForm.dataType === 'object' || editForm.dataType === 'array'">
