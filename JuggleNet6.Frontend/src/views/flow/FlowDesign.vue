@@ -9,6 +9,7 @@
       <div class="toolbar-center">
         <el-button size="small" @click="addNode('START')" :disabled="hasStart" class="tb-btn-start">▶ 开始</el-button>
         <el-button size="small" @click="addNode('METHOD')" class="tb-btn-method">⚙ 方法</el-button>
+        <el-button size="small" @click="addNode('SUB_FLOW')" class="tb-btn-subflow">⬡ 子流程</el-button>
         <el-button size="small" @click="addNode('ASSIGN')" class="tb-btn-assign">← 赋值</el-button>
         <el-button size="small" @click="addNode('CODE')" class="tb-btn-code">{ } 代码</el-button>
         <el-button size="small" @click="addNode('MYSQL')" class="tb-btn-mysql">⊕ 数据库</el-button>
@@ -160,6 +161,67 @@
           <!-- MERGE 节点 -->
           <template v-if="selectedNode.elementType === 'MERGE'">
             <div class="prop-tip">聚合节点：将多个 CONDITION 分支汇聚到一个执行路径。通过画布连线设置入口和出口。</div>
+          </template>
+
+          <!-- SUB_FLOW 子流程节点属性 -->
+          <template v-if="selectedNode.elementType === 'SUB_FLOW'">
+            <div class="prop-item">
+              <label>子流程 Key</label>
+              <el-select v-model="selectedNode.subFlowConfig.subFlowKey" placeholder="选择已发布的子流程"
+                filterable size="small" style="width:100%">
+                <el-option v-for="f in publishedFlows" :key="f.flowKey" :value="f.flowKey"
+                  :label="f.flowName + ' (' + f.flowKey + ')'" />
+              </el-select>
+            </div>
+
+            <!-- 入参映射 -->
+            <div class="prop-section-title">
+              入参映射
+              <el-button size="small" type="primary" link icon="Plus"
+                @click="selectedNode.subFlowConfig.inputMappings.push({ source: '', sourceType: 'VARIABLE', target: '' })">
+                添加
+              </el-button>
+            </div>
+            <div v-for="(rule, idx) in selectedNode.subFlowConfig.inputMappings" :key="'sub-in-' + idx"
+              class="fill-rule-row">
+              <el-select v-model="rule.sourceType" size="small" style="width:88px;flex-shrink:0">
+                <el-option label="变量" value="VARIABLE" />
+                <el-option label="常量" value="CONSTANT" />
+              </el-select>
+              <el-input v-if="rule.sourceType === 'CONSTANT'" v-model="rule.source"
+                placeholder="常量值" size="small" style="flex:1" />
+              <el-select v-else v-model="rule.source" placeholder="来源变量" size="small"
+                filterable allow-create style="flex:1">
+                <el-option v-for="v in allVariables" :key="v.variableCode"
+                  :value="v.variableCode" :label="v.variableCode + ' - ' + v.variableName" />
+              </el-select>
+              <span style="color:#999;padding:0 4px;flex-shrink:0">→</span>
+              <el-input v-model="rule.target" placeholder="子流程入参名" size="small" style="flex:1" />
+              <el-button size="small" type="danger" link icon="Delete"
+                @click="selectedNode.subFlowConfig.inputMappings.splice(idx, 1)" />
+            </div>
+
+            <!-- 出参映射 -->
+            <div class="prop-section-title">
+              出参映射（子流程输出 → 当前流程变量）
+              <el-button size="small" type="primary" link icon="Plus"
+                @click="selectedNode.subFlowConfig.outputMappings.push({ source: '', sourceType: 'VARIABLE', target: '' })">
+                添加
+              </el-button>
+            </div>
+            <div v-for="(rule, idx) in selectedNode.subFlowConfig.outputMappings" :key="'sub-out-' + idx"
+              class="fill-rule-row">
+              <el-input v-model="rule.source" placeholder="子流程输出变量" size="small" style="flex:1" />
+              <span style="color:#999;padding:0 4px;flex-shrink:0">→</span>
+              <el-select v-model="rule.target" placeholder="写入当前流程变量" size="small"
+                filterable allow-create style="flex:1">
+                <el-option v-for="v in allVariables" :key="v.variableCode"
+                  :value="v.variableCode" :label="v.variableCode + ' - ' + v.variableName" />
+              </el-select>
+              <el-button size="small" type="danger" link icon="Delete"
+                @click="selectedNode.subFlowConfig.outputMappings.splice(idx, 1)" />
+            </div>
+            <div class="prop-tip">子流程需先部署发布才能被调用。入参映射将当前变量填入子流程，出参映射将子流程输出写回当前变量。</div>
           </template>
 
           <!-- METHOD 节点属性 -->
@@ -699,6 +761,8 @@ const staticVariables = ref<any[]>([])
 const apiOptions = ref<any[]>([])
 const dataSources = ref<any[]>([])
 const methodApiSelection = ref<any[]>([])
+// 已发布的流程列表（供 SUB_FLOW 节点选择）
+const publishedFlows = ref<any[]>([])
 
 // ====== VueFlow 节点/边 ======
 const vfNodes = ref<any[]>([])
@@ -763,7 +827,7 @@ function vfNodeColor(node: any) {
   const map: Record<string, string> = {
     start: '#52c41a', end: '#ff4d4f', method: '#1890ff',
     assign: '#722ed1', code: '#eb2f96', mysql: '#13c2c2',
-    condition: '#fa8c16', merge: '#7c3aed'
+    condition: '#fa8c16', merge: '#7c3aed', sub_flow: '#0891b2'
   }
   return map[node.data?.elementType?.toLowerCase()] || '#aaa'
 }
@@ -878,7 +942,7 @@ function onPaneClick() {
 
 // 让容器获取焦点（以便接收键盘事件）
 onMounted(async () => {
-  await Promise.all([loadFlowInfo(), loadSuiteApis(), loadDataSources(), loadStaticVariables()])
+  await Promise.all([loadFlowInfo(), loadSuiteApis(), loadDataSources(), loadStaticVariables(), loadPublishedFlows()])
   nextTick(() => { containerRef.value?.focus() })
 })
 
@@ -1272,8 +1336,17 @@ async function loadDataSources() {
 
 async function loadStaticVariables() {
   try {
-    const res: any = await request.get('/system/staticvariable/list')
+    const res: any = await request.get('/system/static-var/list')
     staticVariables.value = res.data || []
+  } catch {}
+}
+
+async function loadPublishedFlows() {
+  try {
+    // 取所有已部署（status=1）的流程定义，排除自身
+    const res: any = await request.post('/flow/definition/page', { pageNum: 1, pageSize: 200 })
+    const records = res.data?.records || []
+    publishedFlows.value = records.filter((f: any) => f.status === 1 && f.flowKey !== flowKey)
   } catch {}
 }
 
@@ -1281,7 +1354,7 @@ async function loadStaticVariables() {
 function nodeIcon(type: string) {
   const map: Record<string, string> = {
     START: '▶', END: '⏹', METHOD: '⚙', CONDITION: '◆',
-    ASSIGN: '←', CODE: '{ }', MYSQL: '⊕', MERGE: '⇒'
+    ASSIGN: '←', CODE: '{ }', MYSQL: '⊕', MERGE: '⇒', SUB_FLOW: '⬡'
   }
   return map[type] || '?'
 }
@@ -1289,7 +1362,7 @@ function nodeIcon(type: string) {
 function nodeTypeName(type: string) {
   const map: Record<string, string> = {
     START: '开始', END: '结束', METHOD: '方法', CONDITION: '条件',
-    ASSIGN: '赋值', CODE: '代码', MYSQL: '数据库', MERGE: '聚合'
+    ASSIGN: '赋值', CODE: '代码', MYSQL: '数据库', MERGE: '聚合', SUB_FLOW: '子流程'
   }
   return map[type] || type
 }
@@ -1319,6 +1392,9 @@ function addNode(type: string) {
   if (type === 'MYSQL') bNode.mysqlConfig = {
     dataSourceName: '', dataSourceType: '', sql: '', operationType: 'QUERY',
     outputVariable: '', affectedRowsVariable: ''
+  }
+  if (type === 'SUB_FLOW') bNode.subFlowConfig = {
+    subFlowKey: '', inputMappings: [], outputMappings: []
   }
 
   businessNodes.value.push(bNode)
@@ -1572,6 +1648,7 @@ async function runDebug() {
 .tb-btn-mysql     { background: #13c2c2 !important; border-color: #13c2c2 !important; color: #fff !important; }
 .tb-btn-condition { background: #fa8c16 !important; border-color: #fa8c16 !important; color: #fff !important; }
 .tb-btn-merge     { background: #7c3aed !important; border-color: #7c3aed !important; color: #fff !important; }
+.tb-btn-subflow   { background: #0891b2 !important; border-color: #0891b2 !important; color: #fff !important; }
 
 .designer-body { flex: 1; display: flex; overflow: hidden; }
 
@@ -1806,6 +1883,7 @@ async function runDebug() {
 .jg-mysql     { background: linear-gradient(135deg, #e6fffb, #b5f5ec); border-color: #13c2c2; }
 .jg-condition { background: linear-gradient(135deg, #fff7e6, #ffd591); border-color: #fa8c16; }
 .jg-merge     { background: linear-gradient(135deg, #f5f0ff, #c4b5fd); border-color: #7c3aed; }
+.jg-sub_flow  { background: linear-gradient(135deg, #e0f2fe, #7dd3fc); border-color: #0891b2; }
 
 /* Handle 连接点样式 */
 .jg-handle {

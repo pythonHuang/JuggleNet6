@@ -175,7 +175,18 @@ public class FlowExecutionService
     {
         var dsInfos     = await BuildDataSourceInfosAsync();
         var staticVars  = await BuildStaticVariableSnapshotAsync();
-        var engine      = new FlowEngine(_httpClientFactory, dsInfos, staticVars);
+
+        // 子流程加载器：根据 flowKey 取最新已发布版本的 flowContent
+        async Task<string?> FlowContentLoader(string flowKey)
+        {
+            var ver = await _db.FlowVersions
+                .Where(v => v.FlowKey == flowKey && v.Status == 1 && v.Deleted == 0)
+                .OrderByDescending(v => v.Id)
+                .FirstOrDefaultAsync();
+            return ver?.FlowContent;
+        }
+
+        var engine      = new FlowEngine(_httpClientFactory, dsInfos, staticVars, FlowContentLoader);
 
         var inputJson  = JsonSerializer.Serialize(inputParams);
         var startTime  = DateTime.Now;

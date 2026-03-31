@@ -2,8 +2,13 @@
   <div class="page-container">
     <div class="page-header">
       <h2>流程定义</h2>
-      <el-button type="primary" icon="Plus" @click="openAdd">新建流程</el-button>
+      <div style="display:flex;gap:8px">
+        <el-button icon="Upload" @click="triggerImport">导入</el-button>
+        <el-button type="primary" icon="Plus" @click="openAdd">新建流程</el-button>
+      </div>
     </div>
+    <!-- 隐藏的文件输入框（用于导入） -->
+    <input ref="importFileRef" type="file" accept=".json" style="display:none" @change="doImport" />
 
     <!-- 搜索 -->
     <el-card class="search-card">
@@ -39,11 +44,12 @@
         </el-table-column>
         <el-table-column prop="flowDesc" label="描述" show-overflow-tooltip />
         <el-table-column prop="createdAt" label="创建时间" width="180" show-overflow-tooltip />
-        <el-table-column label="操作" width="220" fixed="right">
+        <el-table-column label="操作" width="260" fixed="right">
           <template #default="{ row }">
             <el-button size="small" type="primary" link @click="goDesign(row)">设计</el-button>
             <el-button size="small" type="success" link @click="doDeploy(row)">部署</el-button>
             <el-button size="small" link @click="openEdit(row)">编辑</el-button>
+            <el-button size="small" type="warning" link @click="doExport(row)">导出</el-button>
             <el-button size="small" type="danger" link @click="doDelete(row)">删除</el-button>
           </template>
         </el-table-column>
@@ -91,6 +97,7 @@ const page = reactive({ num: 1, size: 10, total: 0 })
 const dialogVisible = ref(false)
 const isEdit = ref(false)
 const formRef = ref()
+const importFileRef = ref<HTMLInputElement>()
 const form = reactive({ id: 0, flowName: '', flowType: 'sync', flowDesc: '' })
 const rules = { flowName: [{ required: true, message: '请输入流程名称', trigger: 'blur' }] }
 
@@ -155,6 +162,49 @@ async function doDeploy(row: any) {
 function goDesign(row: any) {
   router.push(`/design/${row.flowKey}`)
 }
+
+// ===== 导出 =====
+async function doExport(row: any) {
+  try {
+    // 使用 fetch 直接下载文件（绕过 axios 的 JSON 解析）
+    const token = localStorage.getItem('token') || ''
+    const resp = await fetch(`/api/flow/definition/export/${row.id}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    if (!resp.ok) { ElMessage.error('导出失败'); return }
+    const blob = await resp.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `flow_${row.flowKey}_${Date.now()}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+    ElMessage.success('导出成功')
+  } catch (e) {
+    ElMessage.error('导出异常')
+  }
+}
+
+// ===== 导入 =====
+function triggerImport() {
+  importFileRef.value!.value = ''
+  importFileRef.value!.click()
+}
+
+async function doImport(e: Event) {
+  const file = (e.target as HTMLInputElement).files?.[0]
+  if (!file) return
+  try {
+    const text = await file.text()
+    const json = JSON.parse(text)
+    if (json.exportType !== 'flow') { ElMessage.error('文件格式不正确，请选择流程定义的导出文件'); return }
+    const res: any = await request.post('/flow/definition/import', json)
+    ElMessage.success(`导入成功：${res.data?.flowName || ''}`)
+    loadData()
+  } catch (ex: any) {
+    ElMessage.error('导入失败：' + (ex?.message || ex))
+  }
+}
 </script>
 
 <style scoped>
@@ -163,3 +213,4 @@ function goDesign(row: any) {
 .page-header h2 { font-size: 20px; color: #333; }
 .search-card { margin-bottom: 16px; }
 </style>
+

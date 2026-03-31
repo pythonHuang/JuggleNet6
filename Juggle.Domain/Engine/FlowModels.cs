@@ -34,6 +34,9 @@ public class FlowNode
 
     [JsonPropertyName("mysqlConfig")]
     public MysqlConfig? MysqlConfig { get; set; }
+
+    [JsonPropertyName("subFlowConfig")]
+    public SubFlowConfig? SubFlowConfig { get; set; }
 }
 
 /// <summary>方法节点配置</summary>
@@ -134,6 +137,38 @@ public class CodeConfig
     /// <summary>脚本内容</summary>
     [JsonPropertyName("script")]
     public string Script { get; set; } = "";
+}
+
+/// <summary>子流程节点配置（SUB_FLOW 节点）</summary>
+public class SubFlowConfig
+{
+    /// <summary>被调用的子流程 Key</summary>
+    [JsonPropertyName("subFlowKey")]
+    public string SubFlowKey { get; set; } = "";
+
+    /// <summary>入参映射：从当前流程变量填充子流程入参</summary>
+    [JsonPropertyName("inputMappings")]
+    public List<SubFlowMapping> InputMappings { get; set; } = new();
+
+    /// <summary>出参映射：将子流程输出变量写回当前流程变量</summary>
+    [JsonPropertyName("outputMappings")]
+    public List<SubFlowMapping> OutputMappings { get; set; } = new();
+}
+
+/// <summary>子流程变量映射规则</summary>
+public class SubFlowMapping
+{
+    /// <summary>来源名称（当前流程变量名 或 子流程输出变量名）</summary>
+    [JsonPropertyName("source")]
+    public string Source { get; set; } = "";
+
+    /// <summary>VARIABLE / CONSTANT</summary>
+    [JsonPropertyName("sourceType")]
+    public string SourceType { get; set; } = "VARIABLE";
+
+    /// <summary>目标名称（子流程入参名 或 当前流程变量名）</summary>
+    [JsonPropertyName("target")]
+    public string Target { get; set; } = "";
 }
 
 /// <summary>MySQL 节点配置（MYSQL 节点）</summary>

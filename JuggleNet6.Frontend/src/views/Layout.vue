@@ -59,9 +59,11 @@
         </el-dropdown>
       </el-header>
 
-      <!-- 主内容 -->
-      <el-main style="background:#f5f7fa;overflow-y:auto">
-        <router-view />
+      <!-- 主内容：el-main撑满剩余高度，overflow:hidden，内部router-view容器自行滚动 -->
+      <el-main class="main-content">
+        <div class="main-scroll">
+          <router-view />
+        </div>
       </el-main>
     </el-container>
   </el-container>
@@ -101,5 +103,21 @@ function handleCommand(cmd: string) {
   color: #fff;
   gap: 8px;
   border-bottom: 1px solid #0a2540;
+}
+/* el-main 撑满剩余高度，自身不滚动 */
+.main-content {
+  background: #f5f7fa;
+  overflow: hidden;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+/* 内部滚动容器：占满高度，普通页面在此滚动；FlowLog/FlowDesign等特殊页面自己 overflow:hidden 阻止此层滚动 */
+.main-scroll {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 </style>

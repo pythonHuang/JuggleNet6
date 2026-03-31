@@ -177,6 +177,116 @@ public class FlowDefinitionController : ControllerBase
         });
     }
 
+    /// <summary>导出流程定义（含变量、参数）为 JSON 文件</summary>
+    [HttpGet("export/{id}")]
+    public async Task<IActionResult> Export(long id)
+    {
+        var entity = await _db.FlowDefinitions.FindAsync(id);
+        if (entity == null || entity.Deleted == 1)
+            return NotFound("流程不存在");
+
+        var variables = await _db.VariableInfos
+            .Where(v => v.FlowDefinitionId == id && v.Deleted == 0).ToListAsync();
+        var parameters = await _db.Parameters
+            .Where(p => p.OwnerId == id && (p.ParamType == 5 || p.ParamType == 6) && p.Deleted == 0)
+            .OrderBy(p => p.SortNum).ToListAsync();
+
+        var export = new
+        {
+            exportType  = "flow",
+            exportTime  = DateTime.Now.ToString("o"),
+            flowKey     = entity.FlowKey,
+            flowName    = entity.FlowName,
+            flowDesc    = entity.FlowDesc,
+            flowType    = entity.FlowType,
+            flowContent = entity.FlowContent,
+            variables,
+            parameters
+        };
+
+        var json = System.Text.Json.JsonSerializer.Serialize(export, new System.Text.Json.JsonSerializerOptions
+        {
+            WriteIndented = true,
+            PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase
+        });
+        var fileName = $"flow_{entity.FlowKey}_{DateTime.Now:yyyyMMddHHmmss}.json";
+        return File(System.Text.Encoding.UTF8.GetBytes(json), "application/json", fileName);
+    }
+
+    /// <summary>导入流程定义（含变量、参数），相同 flowKey 时自动重命名</summary>
+    [HttpPost("import")]
+    public async Task<ApiResult> Import([FromBody] System.Text.Json.JsonElement body)
+    {
+        try
+        {
+            var opts = new System.Text.Json.JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            };
+
+            if (!body.TryGetProperty("exportType", out var et) || et.GetString() != "flow")
+                return ApiResult.Fail("无效的导入文件格式（exportType 应为 flow）");
+
+            var flowName    = body.GetProperty("flowName").GetString() ?? "导入流程";
+            var flowDesc    = body.TryGetProperty("flowDesc", out var fd) ? fd.GetString() : null;
+            var flowType    = body.TryGetProperty("flowType", out var fty) ? fty.GetString() : null;
+            var flowContent = body.TryGetProperty("flowContent", out var fc) ? fc.GetString() : "[]";
+
+            // 生成新的 flowKey（不复用原来的，避免冲突）
+            var newKey = $"flow_{Guid.NewGuid():N}";
+            var entity = new FlowDefinitionEntity
+            {
+                FlowKey     = newKey,
+                FlowName    = flowName,
+                FlowDesc    = flowDesc,
+                FlowType    = flowType,
+                FlowContent = flowContent,
+                Status      = 0,
+                CreatedAt   = DateTime.Now.ToString("o")
+            };
+            _db.FlowDefinitions.Add(entity);
+            await _db.SaveChangesAsync();
+
+            // 导入变量
+            if (body.TryGetProperty("variables", out var varsEl) && varsEl.ValueKind == System.Text.Json.JsonValueKind.Array)
+            {
+                var vars = System.Text.Json.JsonSerializer.Deserialize<List<VariableInfoEntity>>(varsEl.GetRawText(), opts) ?? new();
+                foreach (var v in vars)
+                {
+                    v.Id               = 0;
+                    v.FlowDefinitionId = entity.Id;
+                    v.FlowKey          = newKey;
+                    v.Deleted          = 0;
+                    v.CreatedAt        = DateTime.Now.ToString("o");
+                    v.UpdatedAt        = null;
+                    _db.VariableInfos.Add(v);
+                }
+            }
+
+            // 导入参数
+            if (body.TryGetProperty("parameters", out var paramsEl) && paramsEl.ValueKind == System.Text.Json.JsonValueKind.Array)
+            {
+                var pars = System.Text.Json.JsonSerializer.Deserialize<List<ParameterEntity>>(paramsEl.GetRawText(), opts) ?? new();
+                foreach (var p in pars)
+                {
+                    p.Id        = 0;
+                    p.OwnerId   = entity.Id;
+                    p.Deleted   = 0;
+                    p.CreatedAt = DateTime.Now.ToString("o");
+                    p.UpdatedAt = null;
+                    _db.Parameters.Add(p);
+                }
+            }
+
+            await _db.SaveChangesAsync();
+            return ApiResult.Success(new { id = entity.Id, flowKey = newKey, flowName });
+        }
+        catch (Exception ex)
+        {
+            return ApiResult.Fail($"导入失败: {ex.Message}");
+        }
+    }
+
     /// <summary>部署流程</summary>
     [HttpPost("deploy")]
     public async Task<ApiResult> Deploy([FromBody] FlowDeployRequest req)

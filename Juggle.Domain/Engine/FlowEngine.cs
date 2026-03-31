@@ -5,8 +5,8 @@ namespace Juggle.Domain.Engine;
 
 /// <summary>
 /// 流程执行引擎：解析流程 JSON，按节点拓扑顺序执行，维护变量上下文
-/// 支持节点类型：START / END / METHOD / CONDITION / ASSIGN / CODE / MYSQL(DB) / MERGE
-/// 支持功能：节点执行日志收集、静态全局变量读写
+/// 支持节点类型：START / END / METHOD / CONDITION / ASSIGN / CODE / MYSQL(DB) / MERGE / SUB_FLOW
+/// 支持功能：节点执行日志收集、静态全局变量读写、子流程递归调用
 /// </summary>
 public class FlowEngine
 {
@@ -15,14 +15,18 @@ public class FlowEngine
     private readonly Dictionary<string, DataSourceInfo> _dataSources;
     /// <summary>静态变量初始值（VarCode → Value）</summary>
     private readonly Dictionary<string, string?> _staticVarSnapshot;
+    /// <summary>根据 flowKey 加载最新已发布流程内容（供 SUB_FLOW 节点调用），可为 null（不支持子流程）</summary>
+    private readonly Func<string, Task<string?>>? _flowContentLoader;
 
     public FlowEngine(IHttpClientFactory httpClientFactory,
                       Dictionary<string, DataSourceInfo>? dataSources = null,
-                      Dictionary<string, string?>? staticVariables = null)
+                      Dictionary<string, string?>? staticVariables = null,
+                      Func<string, Task<string?>>? flowContentLoader = null)
     {
-        _httpClientFactory = httpClientFactory;
-        _dataSources = dataSources ?? new();
-        _staticVarSnapshot = staticVariables ?? new(StringComparer.OrdinalIgnoreCase);
+        _httpClientFactory  = httpClientFactory;
+        _dataSources        = dataSources ?? new();
+        _staticVarSnapshot  = staticVariables ?? new(StringComparer.OrdinalIgnoreCase);
+        _flowContentLoader  = flowContentLoader;
     }
 
     public async Task<FlowResult> ExecuteAsync(
@@ -136,6 +140,9 @@ public class FlowEngine
                 "CODE"          => new CodeNodeExecutor(),
                 "MYSQL" or "DB" => new MysqlNodeExecutor(_dataSources),
                 "CONDITION"     => new ConditionNodeExecutor(),
+                "SUB_FLOW"      => new SubFlowNodeExecutor(
+                    _flowContentLoader ?? throw new InvalidOperationException("当前引擎未配置 flowContentLoader，无法执行 SUB_FLOW 节点"),
+                    _httpClientFactory, _dataSources, _staticVarSnapshot),
                 _ => throw new InvalidOperationException($"未知节点类型: {currentNode.ElementType}")
             };
 

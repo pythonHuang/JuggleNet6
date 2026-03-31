@@ -33,8 +33,8 @@
     </el-card>
 
     <!-- 列表 -->
-    <el-card shadow="never" style="margin-top:12px">
-      <el-table :data="logList" stripe border size="small" v-loading="loading">
+    <el-card shadow="never" class="table-card">
+      <el-table :data="logList" stripe border size="small" v-loading="loading" height="100%">
         <el-table-column prop="id" label="ID" width="70" />
         <el-table-column prop="flowName" label="流程名称" min-width="130" show-overflow-tooltip />
         <el-table-column prop="flowKey" label="流程Key" min-width="150" show-overflow-tooltip />
@@ -70,16 +70,17 @@
         </el-table-column>
       </el-table>
 
-      <el-pagination
-        v-model:current-page="pageNum"
-        v-model:page-size="pageSize"
-        :total="total"
-        :page-sizes="[10, 20, 50]"
-        layout="total, sizes, prev, pager, next"
-        style="margin-top:12px;justify-content:flex-end"
-        @current-change="loadList"
-        @size-change="() => loadList(1)"
-      />
+      <div class="pagination-bar">
+        <el-pagination
+          v-model:current-page="pageNum"
+          v-model:page-size="pageSize"
+          :total="total"
+          :page-sizes="[10, 20, 50]"
+          layout="total, sizes, prev, pager, next"
+          @current-change="loadList"
+          @size-change="() => loadList(1)"
+        />
+      </div>
     </el-card>
 
     <!-- 执行详情抽屉 -->
@@ -221,8 +222,48 @@ onMounted(() => loadList())
 </script>
 
 <style scoped>
-.flow-log-page { padding: 16px; }
-.search-card { }
+/* 页面占满父容器高度，flex列布局，不产生页面级滚动条 */
+.flow-log-page {
+  padding: 16px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+.search-card {
+  flex-shrink: 0;
+}
+/* 表格卡片占满剩余高度 */
+.table-card {
+  margin-top: 12px;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+/* el-card body 也需要 flex 伸缩 */
+.table-card :deep(.el-card__body) {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding-bottom: 0;
+}
+/* 表格本身占满card body */
+.table-card :deep(.el-table) {
+  flex: 1;
+  min-height: 0;
+}
+/* 分页固定在底部 */
+.pagination-bar {
+  flex-shrink: 0;
+  padding: 10px 0 2px;
+  display: flex;
+  justify-content: flex-end;
+}
 .error-msg { color: var(--el-color-danger); font-size: 12px; }
 .json-pre {
   background: #1e1e1e;
