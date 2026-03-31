@@ -7,7 +7,7 @@ public class StaticVariableEntity : BaseEntity
     public string? VarCode { get; set; }
     /// <summary>变量名称（中文描述）</summary>
     public string? VarName { get; set; }
-    /// <summary>数据类型：string / integer / double / boolean / json</summary>
+    /// <summary>数据类型：string / integer / double / boolean / date / json</summary>
     public string? DataType { get; set; }
     /// <summary>当前值（字符串形式存储）</summary>
     public string? Value { get; set; }

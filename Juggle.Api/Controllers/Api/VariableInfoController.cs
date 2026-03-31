@@ -33,8 +33,15 @@ public class VariableInfoController : ControllerBase
     {
         var flowKey          = req.GetProperty("flowKey").GetString() ?? "";
         var flowDefinitionId = req.GetProperty("flowDefinitionId").GetInt64();
-        var variables        = req.GetProperty("variables").Deserialize<List<VariableInfoEntity>>()
-                               ?? new List<VariableInfoEntity>();
+        
+        // 使用与全局配置一致的JSON序列化选项（camelCase）
+        var jsonOptions = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            PropertyNameCaseInsensitive = true
+        };
+        var variables    = req.GetProperty("variables").Deserialize<List<VariableInfoEntity>>(jsonOptions)
+                           ?? new List<VariableInfoEntity>();
 
         // 删除旧变量
         var old = await _db.VariableInfos.Where(v => v.FlowKey == flowKey && v.Deleted == 0).ToListAsync();

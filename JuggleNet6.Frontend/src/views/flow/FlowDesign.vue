@@ -74,8 +74,17 @@
               <div class="jg-icon">{{ nodeIcon(data.elementType) }}</div>
               <div class="jg-name">{{ data.label || data.nodeKey }}</div>
               <div class="jg-type">{{ nodeTypeName(data.elementType) }}</div>
+              <!-- 节点报错提示 -->
+              <div
+                v-if="debugNodeStatus[data.nodeKey] === 'fail' && debugNodeError[data.nodeKey]"
+                class="jg-debug-error-tip"
+                :title="debugNodeError[data.nodeKey]"
+                @click.stop="showNodeDebugDetail(data.nodeKey)"
+              >
+                ⚠️ {{ debugNodeError[data.nodeKey] }}
+              </div>
               <!-- 调试输出变量预览 -->
-              <div v-if="debugNodeOutput[data.nodeKey]" class="jg-debug-output" @click.stop="showNodeDebugDetail(data.nodeKey)">
+              <div v-if="debugNodeOutput[data.nodeKey] && debugNodeStatus[data.nodeKey] !== 'fail'" class="jg-debug-output" @click.stop="showNodeDebugDetail(data.nodeKey)">
                 📊 查看输出
               </div>
               <Handle type="source" :position="Position.Bottom" class="jg-handle jg-handle-bottom" />
@@ -577,11 +586,21 @@
           <span style="font-weight:bold;font-size:15px" :style="{ color: debugResult.success ? '#52c41a' : '#ff4d4f' }">
             {{ debugResult.success ? '✅ 执行成功' : '❌ 执行失败' }}
           </span>
-          <span v-if="debugResult.executionTime" style="color:#888;font-size:12px">
-            耗时 {{ debugResult.executionTime }} ms
+          <span v-if="debugResult.costMs || debugResult.executionTime" style="color:#888;font-size:12px">
+            耗时 {{ debugResult.costMs ?? debugResult.executionTime }} ms
           </span>
           <el-button size="small" @click="clearDebugHighlight" v-if="hasDebugHighlight">清除高亮</el-button>
         </div>
+
+        <!-- 失败时显示错误信息 -->
+        <el-alert
+          v-if="!debugResult.success && debugResult.errorMessage"
+          :title="debugResult.errorMessage"
+          type="error"
+          show-icon
+          :closable="false"
+          style="margin-bottom:10px"
+        />
 
         <el-tabs v-model="debugTab">
           <!-- 节点执行时间轴 -->
@@ -602,7 +621,10 @@
                     </el-tag>
                     <span v-if="log.executionTime" style="color:#aaa;font-size:11px;margin-left:auto">{{ log.executionTime }}ms</span>
                   </div>
-                  <div v-if="log.status !== 'SUCCESS' && log.detail" class="dtl-error">{{ log.detail }}</div>
+                  <!-- 节点失败时显示错误信息（errorMessage 优先，其次 detail） -->
+                  <div v-if="log.status !== 'SUCCESS'" class="dtl-error">
+                    {{ log.errorMessage || log.detail || '节点执行失败' }}
+                  </div>
                 </div>
               </div>
             </div>
@@ -673,6 +695,7 @@ const businessNodes = ref<any[]>([])
 const selectedNodeKey = ref<string | null>(null)
 const selectedEdgeId = ref<string | null>(null)
 const allVariables = ref<any[]>([])
+const staticVariables = ref<any[]>([])
 const apiOptions = ref<any[]>([])
 const dataSources = ref<any[]>([])
 const methodApiSelection = ref<any[]>([])
@@ -766,6 +789,8 @@ const debugTab = ref('timeline')
 const debugNodeStatus = ref<Record<string, string>>({})
 // 节点调试输出：nodeKey -> log
 const debugNodeOutput = ref<Record<string, any>>({})
+// 节点报错信息：nodeKey -> errorMessage
+const debugNodeError = ref<Record<string, string>>({})
 const hasDebugHighlight = computed(() => Object.keys(debugNodeStatus.value).length > 0)
 
 // 节点详情弹窗
@@ -778,7 +803,8 @@ const nodeDebugDetailStr = ref('')
 const debugResultStr = computed(() => debugResult.value ? JSON.stringify(debugResult.value, null, 2) : '')
 const debugOutputStr = computed(() => {
   if (!debugResult.value) return ''
-  const out = debugResult.value.output || debugResult.value.outputVariables || debugResult.value.result
+  // 后端返回字段名为 outputs（带s），兼容多种字段名
+  const out = debugResult.value.outputs ?? debugResult.value.output ?? debugResult.value.outputVariables ?? debugResult.value.result
   return out ? JSON.stringify(out, null, 2) : JSON.stringify(debugResult.value, null, 2)
 })
 
@@ -800,6 +826,7 @@ function showNodeDebugDetail(nodeKey: string) {
 function clearDebugHighlight() {
   debugNodeStatus.value = {}
   debugNodeOutput.value = {}
+  debugNodeError.value = {}
   // 刷新节点以清除高亮
   vfNodes.value = vfNodes.value.map(n => ({ ...n }))
 }
@@ -809,6 +836,7 @@ const dataTypes = [
   { value: 'integer', label: 'integer' },
   { value: 'double',  label: 'double' },
   { value: 'boolean', label: 'boolean' },
+  { value: 'date',    label: 'date' },
   { value: 'date',    label: 'date（日期）' },
   { value: 'json',    label: 'json（JSON对象）' },
   { value: 'object',  label: 'object（对象类型）' },
@@ -850,7 +878,7 @@ function onPaneClick() {
 
 // 让容器获取焦点（以便接收键盘事件）
 onMounted(async () => {
-  await Promise.all([loadFlowInfo(), loadSuiteApis(), loadDataSources()])
+  await Promise.all([loadFlowInfo(), loadSuiteApis(), loadDataSources(), loadStaticVariables()])
   nextTick(() => { containerRef.value?.focus() })
 })
 
@@ -1000,13 +1028,185 @@ function syncVfNodeLabel(bNode: any) {
 
 // ====== 自动布局 ======
 function autoLayout() {
-  const xBase = 200
-  const yBase = 60
-  const yGap = 130
-  businessNodes.value.forEach((bNode, idx) => {
-    bNode._x = xBase
-    bNode._y = yBase + idx * yGap
+  if (businessNodes.value.length === 0) return
+
+  const NODE_W = 160   // 节点宽度（含间距）
+  const NODE_H = 140   // 节点高度（含间距）
+
+  const nodeMap = new Map<string, any>()
+  businessNodes.value.forEach(n => nodeMap.set(n.key, n))
+
+  // 收集所有边（包含 CONDITION 的 conditions 分支）
+  function getOutgoings(node: any): string[] {
+    const outs: string[] = []
+    if (node.outgoings) outs.push(...node.outgoings)
+    if (node.elementType === 'CONDITION' && node.conditions) {
+      node.conditions.forEach((c: any) => {
+        if (c.outgoing && !outs.includes(c.outgoing)) outs.push(c.outgoing)
+      })
+    }
+    return outs.filter(k => nodeMap.has(k))
+  }
+
+  // 计算每个节点的入度
+  const inDegree = new Map<string, number>()
+  businessNodes.value.forEach(n => inDegree.set(n.key, 0))
+  businessNodes.value.forEach(n => {
+    getOutgoings(n).forEach(k => inDegree.set(k, (inDegree.get(k) || 0) + 1))
   })
+
+  // 找到起点（START 优先，否则入度0）
+  const startNode = businessNodes.value.find(n => n.elementType === 'START')
+    || businessNodes.value.find(n => (inDegree.get(n.key) || 0) === 0)
+  if (!startNode) {
+    // fallback：简单竖排
+    businessNodes.value.forEach((n, i) => { n._x = 200; n._y = 60 + i * NODE_H })
+    syncBusinessNodesToVf()
+    ElMessage.success('已自动布局')
+    return
+  }
+
+  // 递归布局：返回「该子树」实际占用的总宽度（列数 * NODE_W），并写入 _x/_y
+  // colOffset: 当前子树的左侧列偏移（列数）
+  // row: 当前起始行（层级）
+  // visited: 防止死循环
+  // 返回：[占用的列宽（列数）, 最深行号]
+  const positioned = new Map<string, boolean>()
+
+  function layoutSubtree(nodeKey: string, colOffset: number, row: number): [number, number] {
+    if (!nodeMap.has(nodeKey)) return [1, row]
+    const node = nodeMap.get(nodeKey)!
+
+    // 如果已经定位过（如 MERGE 节点被多个分支共享），直接跳过
+    if (positioned.get(nodeKey)) return [1, row]
+    positioned.set(nodeKey, true)
+
+    const outs = getOutgoings(node)
+
+    if (node.elementType === 'CONDITION' && node.conditions && node.conditions.length > 0) {
+      // -------- CONDITION 节点：先放置自身，然后横向展开各分支 --------
+      node._x = colOffset * NODE_W + 100
+      node._y = row * NODE_H + 60
+
+      // 收集有效分支
+      const branches: string[] = []
+      node.conditions.forEach((c: any) => { if (c.outgoing && nodeMap.has(c.outgoing)) branches.push(c.outgoing) })
+      // outgoings 里可能还有 MERGE 节点直连的情况，也加入（已去重）
+      node.outgoings?.forEach((k: string) => { if (nodeMap.has(k) && !branches.includes(k)) branches.push(k) })
+
+      if (branches.length === 0) return [1, row + 1]
+
+      // 布局各分支，横向并排
+      let totalCols = 0
+      let maxRow = row + 1
+      const branchResults: Array<[string, number, number, number]> = [] // [key, colStart, cols, maxRow]
+
+      branches.forEach(branchKey => {
+        const branchNode = nodeMap.get(branchKey)!
+        // 跳过 MERGE 节点（汇聚点）
+        if (branchNode?.elementType === 'MERGE') {
+          branchResults.push([branchKey, colOffset + totalCols, 0, row + 1])
+          return
+        }
+        const [cols, deepRow] = layoutSubtree(branchKey, colOffset + totalCols, row + 1)
+        branchResults.push([branchKey, colOffset + totalCols, cols, deepRow])
+        totalCols += cols
+        if (deepRow > maxRow) maxRow = deepRow
+      })
+
+      const spanCols = Math.max(totalCols, 1)
+      // 让 CONDITION 节点水平居中于所有分支
+      node._x = (colOffset + spanCols / 2 - 0.5) * NODE_W + 100
+
+      // 找汇聚的 MERGE 节点
+      const mergeKey = findMergeForCondition(node, nodeMap)
+      let afterRow = maxRow + 1
+      if (mergeKey && nodeMap.has(mergeKey) && !positioned.get(mergeKey)) {
+        const mergeNode = nodeMap.get(mergeKey)!
+        mergeNode._x = (colOffset + spanCols / 2 - 0.5) * NODE_W + 100
+        mergeNode._y = afterRow * NODE_H + 60
+        positioned.set(mergeKey, true)
+
+        // MERGE 之后的节点继续主干布局
+        const mergeOuts = (mergeNode.outgoings || []).filter((k: string) => nodeMap.has(k))
+        let curRow = afterRow + 1
+        for (const nextKey of mergeOuts) {
+          const [, deepRow] = layoutSubtree(nextKey, colOffset + Math.floor(spanCols / 2), curRow)
+          curRow = deepRow + 1
+        }
+        return [spanCols, curRow]
+      }
+
+      // 没有 MERGE，继续顺序布局 outgoings 里不在 branches 里的节点
+      const mainContinue = (node.outgoings || []).filter((k: string) => nodeMap.has(k) && !branches.includes(k))
+      let curRow = afterRow
+      for (const nextKey of mainContinue) {
+        const [, deepRow] = layoutSubtree(nextKey, colOffset + Math.floor(spanCols / 2), curRow)
+        curRow = deepRow + 1
+      }
+      return [spanCols, curRow]
+
+    } else {
+      // -------- 普通节点（含 START/END/METHOD/ASSIGN/CODE/MYSQL/MERGE） --------
+      node._x = colOffset * NODE_W + 100
+      node._y = row * NODE_H + 60
+
+      if (outs.length === 0) return [1, row]
+
+      let curRow = row + 1
+      for (const nextKey of outs) {
+        const [, deepRow] = layoutSubtree(nextKey, colOffset, curRow)
+        curRow = deepRow + 1
+      }
+      return [1, curRow - 1]
+    }
+  }
+
+  // 找 CONDITION 节点分支的汇聚 MERGE（BFS）
+  function findMergeForCondition(condNode: any, nm: Map<string, any>): string | null {
+    const branches: string[] = []
+    condNode.conditions?.forEach((c: any) => { if (c.outgoing) branches.push(c.outgoing) })
+    if (branches.length === 0) return null
+    for (const b of branches) {
+      const found = bfsFindMerge(b, nm, new Set<string>())
+      if (found) return found
+    }
+    return null
+  }
+
+  function bfsFindMerge(key: string, nm: Map<string, any>, visited: Set<string>): string | null {
+    if (!key || visited.has(key) || !nm.has(key)) return null
+    visited.add(key)
+    const n = nm.get(key)!
+    if (n.elementType === 'MERGE') return key
+    for (const k of (n.outgoings || [])) {
+      const r = bfsFindMerge(k, nm, visited)
+      if (r) return r
+    }
+    if (n.conditions) {
+      for (const c of n.conditions) {
+        if (c.outgoing) {
+          const r = bfsFindMerge(c.outgoing, nm, visited)
+          if (r) return r
+        }
+      }
+    }
+    return null
+  }
+
+  // 开始布局
+  layoutSubtree(startNode.key, 0, 0)
+
+  // 处理未被访问的孤立节点
+  let orphanRow = 0
+  businessNodes.value.forEach(n => {
+    if (!positioned.get(n.key)) {
+      n._x = 100 + 2 * NODE_W
+      n._y = 60 + orphanRow * NODE_H
+      orphanRow++
+    }
+  })
+
   syncBusinessNodesToVf()
   ElMessage.success('已自动布局')
 }
@@ -1067,6 +1267,13 @@ async function loadDataSources() {
   try {
     const res: any = await request.get('/system/datasource/list')
     dataSources.value = res.data || []
+  } catch {}
+}
+
+async function loadStaticVariables() {
+  try {
+    const res: any = await request.get('/system/staticvariable/list')
+    staticVariables.value = res.data || []
   } catch {}
 }
 
@@ -1247,6 +1454,8 @@ async function saveVariables() {
     variables: allVariables.value
   })
   ElMessage.success('变量保存成功')
+  // 保存成功后重新加载流程信息，确保数据同步
+  await loadFlowInfo()
 }
 
 function varTypeName(type: string) { return { INPUT: '输入', OUTPUT: '输出', VARIABLE: '中间' }[type] || type }
@@ -1290,6 +1499,7 @@ async function runDebug() {
   // 清除旧的高亮
   debugNodeStatus.value = {}
   debugNodeOutput.value = {}
+  debugNodeError.value = {}
   try {
     let params = {}
     try { params = JSON.parse(debugParams.value) } catch { ElMessage.error('参数JSON格式错误'); return }
@@ -1300,14 +1510,19 @@ async function runDebug() {
     const nodeLogs: any[] = res.data?.nodeLogs || []
     const newStatus: Record<string, string> = {}
     const newOutput: Record<string, any> = {}
+    const newError: Record<string, string> = {}
     for (const log of nodeLogs) {
       const k = log.nodeKey
       if (!k) continue
       newStatus[k] = log.status === 'SUCCESS' ? 'success' : 'fail'
       newOutput[k] = log
+      if (log.status !== 'SUCCESS') {
+        newError[k] = log.errorMessage || log.detail || '执行失败'
+      }
     }
     debugNodeStatus.value = newStatus
     debugNodeOutput.value = newOutput
+    debugNodeError.value = newError
 
     // 刷新节点（让 class 重新计算）
     vfNodes.value = vfNodes.value.map(n => ({ ...n }))
@@ -1560,6 +1775,24 @@ async function runDebug() {
   background: rgba(24,144,255,0.08);
 }
 .jg-debug-output:hover { background: rgba(24,144,255,0.18); }
+
+/* 节点报错提示 */
+.jg-debug-error-tip {
+  font-size: 10px;
+  color: #ff4d4f;
+  margin-top: 3px;
+  cursor: pointer;
+  padding: 2px 5px;
+  border-radius: 3px;
+  background: rgba(255,77,79,0.08);
+  border: 1px solid rgba(255,77,79,0.2);
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.4;
+}
+.jg-debug-error-tip:hover { background: rgba(255,77,79,0.15); }
 
 .jg-icon { font-size: 20px; margin-bottom: 4px; }
 .jg-name { font-size: 12px; font-weight: 600; color: #333; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; }

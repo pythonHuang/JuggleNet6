@@ -143,9 +143,38 @@ public class FlowDefinitionController : ControllerBase
 
         var result = await _flowExec.RunAsync(entity, entity.FlowContent!, req.Params, "debug");
 
-        return result.Success
-            ? ApiResult.Success(new { outputs = result.OutputData, logId = result.LogId, costMs = result.CostMs })
-            : ApiResult.Fail(result.ErrorMessage ?? "执行失败");
+        // 查询节点执行明细（无论成功还是失败都查，用于前端高亮报错节点）
+        List<FlowNodeLogEntity> nodeLogs = new();
+        if (result.LogId.HasValue)
+        {
+            nodeLogs = await _db.FlowNodeLogs
+                .Where(n => n.FlowLogId == result.LogId.Value && n.Deleted == 0)
+                .OrderBy(n => n.SeqNo)
+                .ToListAsync();
+        }
+
+        // 即使失败也返回 200 + 详细节点日志，让前端高亮报错节点
+        return ApiResult.Success(new
+        {
+            success = result.Success,
+            errorMessage = result.ErrorMessage,
+            outputs = result.OutputData,
+            logId = result.LogId,
+            costMs = result.CostMs,
+            nodeLogs = nodeLogs.Select(n => new
+            {
+                nodeKey = n.NodeKey,
+                nodeType = n.NodeType,
+                status = n.Status,
+                executionTime = n.CostMs,
+                detail = n.Detail,
+                errorMessage = n.ErrorMessage,
+                inputSnapshot = n.InputSnapshot,
+                outputSnapshot = n.OutputSnapshot,
+                startTime = n.StartTime,
+                endTime = n.EndTime
+            }).ToList()
+        });
     }
 
     /// <summary>部署流程</summary>

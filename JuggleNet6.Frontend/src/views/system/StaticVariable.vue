@@ -83,6 +83,7 @@
             <el-option label="integer（整数）" value="integer" />
             <el-option label="double（浮点数）" value="double" />
             <el-option label="boolean（布尔）" value="boolean" />
+            <el-option label="date（日期）" value="date" />
             <el-option label="json（JSON对象）" value="json" />
           </el-select>
         </el-form-item>
