@@ -16,14 +16,16 @@
 
 | 功能模块 | 说明 |
 |---------|------|
-| 🎨 可视化流程设计器 | 拖拽节点、连线建立数据流、自动布局、MiniMap 缩略图 |
-| 🔧 多种节点类型 | START / END / METHOD / CONDITION / ASSIGN / CODE / MYSQL / MERGE |
-| ▶️ 流程调试 | 在设计界面直接调试，走过节点高亮显示、查看输出结果 |
-| 📦 套件 & 接口管理 | 组织管理基础 HTTP API，支持 Swagger 解析导入 |
+| 🎨 可视化流程设计器 | 拖拽节点、连线建立数据流、自动布局（拓扑排序）、MiniMap 缩略图 |
+| 🔧 多种节点类型 | START / END / METHOD / CONDITION / ASSIGN / CODE / MYSQL / MERGE / **SUB_FLOW** |
+| ▶️ 流程调试 | 在设计界面直接调试，节点高亮显示（成功绿/失败红）、查看输出结果和节点日志 |
+| 📦 套件 & 接口管理 | 组织管理基础 HTTP API，支持导入/导出 JSON 分享移植 |
 | 🗄️ 多数据库支持 | SQLite / MySQL / PostgreSQL / SQL Server |
 | 📊 执行日志 | 流程执行主日志 + 节点明细日志（含变量快照时间轴） |
 | 🔑 Token 管理 | 开放接口访问令牌管理 |
-| 📐 全局静态变量 | 跨流程共享变量，支持读写与重置 |
+| 📐 全局静态变量 | 跨流程共享变量，支持读写与重置默认值 |
+| 📤 导入/导出 | 流程定义和套件支持 JSON 导出/导入，方便分享移植 |
+| 🔗 子流程编排 | SUB_FLOW 节点可调用已发布的其他流程，支持入参/出参变量映射 |
 | 🔐 JWT 认证 | 控制台登录认证 |
 
 ---
@@ -69,7 +71,7 @@ JuggleNet6/
 │
 ├── Juggle.Domain/            # 领域层：实体 + 流程引擎
 │   ├── Entities/             # 15个领域实体
-│   └── Engine/               # FlowEngine + 8个节点执行器
+│   └── Engine/               # FlowEngine + 9个节点执行器
 │
 ├── Juggle.Infrastructure/    # 基础设施层
 │   ├── Persistence/          # JuggleDbContext（EF Core）
@@ -140,10 +142,11 @@ Copy-Item dist\* ..\Juggle.Api\wwwroot\ -Recurse -Force
 | END | 结束节点，流程出口 |
 | METHOD | 方法节点，调用外部 HTTP API |
 | CONDITION | 条件节点，多分支判断 |
-| ASSIGN | 赋值节点，变量赋值/类型转换 |
-| CODE | 代码节点，执行 JavaScript 脚本 |
-| MYSQL | 数据库节点，执行 SQL 查询 |
+| ASSIGN | 赋值节点，变量赋值/类型转换，支持读写全局静态变量 |
+| CODE | 代码节点，执行 JavaScript 脚本（`$var`/`$static` 对象） |
+| MYSQL | 数据库节点，执行 SQL 查询（支持 `${varName}` 模板替换） |
 | MERGE | 聚合节点，多分支汇聚 |
+| **SUB_FLOW** | **子流程节点，调用已发布的其他流程，支持入参/出参变量映射** |
 
 ---
 
@@ -162,6 +165,35 @@ Copy-Item dist\* ..\Juggle.Api\wwwroot\ -Recurse -Force
   "data": { ... }
 }
 ```
+
+---
+
+## 开放接口访问方式
+
+```http
+# 带版本号触发（指定某一版本）
+POST /open/flow/trigger/v1/sync_abcdefghij
+X-Access-Token: your-api-token
+
+# 不带版本号触发（自动取最新已发布版本）
+POST /open/flow/trigger/sync_abcdefghij
+X-Access-Token: your-api-token
+```
+
+---
+
+## 导入/导出功能
+
+流程定义和套件均支持 JSON 格式的导入/导出，方便在不同环境间分享和移植：
+
+| 操作 | 接口 |
+|------|------|
+| 导出流程定义 | `GET /api/flow/definition/export/{id}` |
+| 导入流程定义 | `POST /api/flow/definition/import` |
+| 导出套件（含接口+参数） | `GET /api/suite/export/{id}` |
+| 导入套件 | `POST /api/suite/import` |
+
+> 导入时自动生成新的唯一标识（flowKey / suiteCode），不会覆盖已有数据。
 
 ---
 
