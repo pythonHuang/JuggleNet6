@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Juggle 接口测试</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f7fa; color: #333; }
+    .header { background: #409eff; color: #fff; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; }
+    .header h1 { font-size: 20px; font-weight: 600; }
+    .token-bar { display: flex; align-items: center; gap: 8px; }
+    .token-bar input { padding: 6px 12px; border: 1px solid rgba(255,255,255,.3); border-radius: 4px; background: rgba(255,255,255,.15); color: #fff; font-size: 13px; width: 300px; }
+    .token-bar input::placeholder { color: rgba(255,255,255,.6); }
+    .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+
+    .card { background: #fff; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,.08); margin-bottom: 16px; overflow: hidden; }
+    .card-header { padding: 12px 16px; background: #fafafa; border-bottom: 1px solid #eee; font-weight: 600; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+    .card-header:hover { background: #f0f0f0; }
+    .card-body { padding: 16px; }
+    .method-tag { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 11px; font-weight: 700; color: #fff; margin-right: 8px; }
+    .method-tag.post { background: #49cc90; }
+    .method-tag.get { background: #61affe; }
+
+    .endpoint-url { font-family: 'Courier New', monospace; font-size: 13px; color: #555; }
+
+    .params-area { margin: 12px 0; }
+    .params-area h4 { font-size: 13px; color: #666; margin-bottom: 6px; }
+
+    .send-btn { background: #409eff; color: #fff; border: none; padding: 8px 24px; border-radius: 4px; cursor: pointer; font-size: 14px; margin-top: 12px; }
+    .send-btn:hover { background: #66b1ff; }
+
+    .response-area { margin-top: 16px; }
+    .response-status { font-size: 13px; margin-bottom: 8px; }
+    .response-status.success { color: #67c23a; }
+    .response-status.error { color: #f56c6c; }
+    .response-body { background: #f8f9fa; border: 1px solid #eee; border-radius: 4px; padding: 12px; font-family: 'Courier New', monospace; font-size: 13px; white-space: pre-wrap; max-height: 400px; overflow-y: auto; }
+
+    .tabs { display: flex; gap: 0; border-bottom: 1px solid #dcdfe6; margin-bottom: 16px; }
+    .tab { padding: 8px 20px; cursor: pointer; border-bottom: 2px solid transparent; font-size: 14px; color: #909399; }
+    .tab.active { color: #409eff; border-bottom-color: #409eff; }
+
+    .flow-item { border: 1px solid #ebeef5; border-radius: 6px; padding: 12px 16px; margin-bottom: 10px; cursor: pointer; transition: box-shadow .2s; }
+    .flow-item:hover { box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+    .flow-item .name { font-weight: 600; font-size: 14px; }
+    .flow-item .meta { font-size: 12px; color: #909399; margin-top: 4px; }
+
+    .empty { text-align: center; color: #c0c4cc; padding: 40px; font-size: 14px; }
+    .loading { text-align: center; padding: 20px; color: #909399; }
+    textarea { resize: vertical; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Juggle 接口测试</h1>
+    <div class="token-bar">
+      <input id="tokenInput" placeholder="输入 Access Token..." />
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="tabs">
+      <div class="tab active" onclick="switchTab('flow')">流程测试</div>
+      <div class="tab" onclick="switchTab('api')">接口测试</div>
+    </div>
+
+    <div id="flowTab">
+      <div id="flowList" class="loading">加载中...</div>
+    </div>
+
+    <div id="apiTab" style="display:none">
+      <div id="apiList" class="loading">加载中...</div>
+    </div>
+  </div>
+
+  <script>
+    const BASE = window.location.origin;
+    let currentTab = 'flow';
+    let flows = [];
+    let apis = [];
+
+    function getToken() {
+      return document.getElementById('tokenInput').value.trim();
+    }
+
+    function switchTab(tab) {
+      currentTab = tab;
+      document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', (tab === 'flow' ? i === 0 : i === 1)));
+      document.getElementById('flowTab').style.display = tab === 'flow' ? '' : 'none';
+      document.getElementById('apiTab').style.display = tab === 'api' ? '' : 'none';
+    }
+
+    async function loadFlows() {
+      const el = document.getElementById('flowList');
+      try {
+        const res = await fetch(BASE + '/api/flow/info/page', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pageNum: 1, pageSize: 500 })
+        });
+        const json = await res.json();
+        flows = json.data?.records || [];
+        if (flows.length === 0) { el.innerHTML = '<div class="empty">暂无已部署的流程（需要登录后才能加载数据）</div>'; return; }
+        el.innerHTML = flows.map((f, i) => `
+          <div class="flow-item" onclick="toggleFlowDetail(${i})">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <span class="name">${esc(f.flowName)}</span>
+              <span class="method-tag post">POST</span>
+            </div>
+            <div class="meta">${esc(f.flowKey)} | ${f.flowType === 'sync' ? '同步' : '异步'} ${f.flowDesc ? '| ' + esc(f.flowDesc) : ''}</div>
+            <div class="endpoint-url" style="margin-top:6px">/open/flow/trigger/${esc(f.flowKey)}</div>
+          </div>
+          <div id="flowDetail_${i}" style="display:none" class="card">
+            <div class="card-body">
+              <div class="params-area">
+                <h4>请求参数 (JSON)</h4>
+                <textarea id="flowParams_${i}" rows="5" style="width:100%;padding:8px;border:1px solid #dcdfe6;border-radius:4px;font-family:Courier New;font-size:13px">{"flowData": {}}</textarea>
+              </div>
+              <button class="send-btn" onclick="sendFlow(${i})">发送请求</button>
+              <div id="flowResult_${i}" class="response-area" style="display:none"></div>
+            </div>
+          </div>
+        `).join('');
+      } catch (e) { el.innerHTML = '<div class="empty">加载流程列表失败（可能需要先登录控制台创建数据）</div>'; }
+    }
+
+    function toggleFlowDetail(i) {
+      const el = document.getElementById('flowDetail_' + i);
+      el.style.display = el.style.display === 'none' ? '' : 'none';
+    }
+
+    async function sendFlow(i) {
+      const f = flows[i];
+      const token = getToken();
+      if (!token) { alert('请输入 Access Token'); return; }
+      const params = document.getElementById('flowParams_' + i).value;
+      const resultEl = document.getElementById('flowResult_' + i);
+      resultEl.style.display = '';
+      resultEl.innerHTML = '<div class="loading">请求中...</div>';
+      try {
+        const res = await fetch(BASE + '/open/flow/trigger/' + f.flowKey, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Access-Token': token },
+          body: params
+        });
+        const json = await res.json();
+        const ok = json.code === 200;
+        resultEl.innerHTML = '<div class="response-status ' + (ok ? 'success' : 'error') + '">Status: ' + (ok ? 'OK' : 'Error') + (ok ? '' : ' | ' + (json.message || '')) + '</div><div class="response-body">' + esc(JSON.stringify(json, null, 2)) + '</div>';
+      } catch (e) {
+        resultEl.innerHTML = '<div class="response-status error">请求异常：' + e.message + '</div>';
+      }
+    }
+
+    async function loadApis() {
+      const el = document.getElementById('apiList');
+      try {
+        const suitesRes = await fetch(BASE + '/api/suite/list');
+        const suitesJson = await suitesRes.json();
+        const suites = suitesJson.data || [];
+        apis = [];
+        for (const suite of suites) {
+          const apisRes = await fetch(BASE + '/api/suite/api/list', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ suiteCode: suite.suiteCode })
+          });
+          const apisJson = await apisRes.json();
+          for (const api of (apisJson.data || [])) {
+            apis.push({ ...api, suiteName: suite.suiteName });
+          }
+        }
+        if (apis.length === 0) { el.innerHTML = '<div class="empty">暂无接口（需要登录后才能加载数据）</div>'; return; }
+        el.innerHTML = apis.map((a, i) => `
+          <div class="flow-item" onclick="toggleApiDetail(${i})">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <span class="name">${esc(a.methodName)} <span style="font-weight:400;color:#909399;font-size:12px">(${esc(a.suiteName)})</span></span>
+              <span class="method-tag ${(a.requestType || 'get').toLowerCase()}">${(a.requestType || 'GET').toUpperCase()}</span>
+            </div>
+            <div class="endpoint-url" style="margin-top:6px">${esc(a.url || '')}</div>
+          </div>
+          <div id="apiDetail_${i}" style="display:none" class="card">
+            <div class="card-body">
+              <div class="params-area">
+                <h4>请求参数 (JSON)</h4>
+                <textarea id="apiParams_${i}" rows="5" style="width:100%;padding:8px;border:1px solid #dcdfe6;border-radius:4px;font-family:Courier New;font-size:13px">{}</textarea>
+              </div>
+              <button class="send-btn" onclick="sendApi(${i})">发送请求</button>
+              <div id="apiResult_${i}" class="response-area" style="display:none"></div>
+            </div>
+          </div>
+        `).join('');
+      } catch (e) { el.innerHTML = '<div class="empty">加载接口列表失败（可能需要先登录控制台创建数据）</div>'; }
+    }
+
+    function toggleApiDetail(i) {
+      const el = document.getElementById('apiDetail_' + i);
+      el.style.display = el.style.display === 'none' ? '' : 'none';
+    }
+
+    async function sendApi(i) {
+      const a = apis[i];
+      const token = getToken();
+      if (!token) { alert('请输入 Access Token'); return; }
+      const params = document.getElementById('apiParams_' + i).value;
+      const resultEl = document.getElementById('apiResult_' + i);
+      resultEl.style.display = '';
+      resultEl.innerHTML = '<div class="loading">请求中...</div>';
+      try {
+        const method = (a.requestType || 'GET').toUpperCase();
+        const opts = { method, headers: { 'Content-Type': 'application/json', 'X-Access-Token': token } };
+        if (method !== 'GET' && method !== 'HEAD') opts.body = params;
+        const res = await fetch(a.url, opts);
+        const text = await res.text();
+        let json;
+        try { json = JSON.parse(text); } catch { json = text; }
+        resultEl.innerHTML = '<div class="response-status ' + (res.ok ? 'success' : 'error') + '">Status: ' + res.status + ' ' + res.statusText + '</div><div class="response-body">' + esc(typeof json === 'string' ? json : JSON.stringify(json, null, 2)) + '</div>';
+      } catch (e) {
+        resultEl.innerHTML = '<div class="response-status error">请求异常：' + e.message + '</div>';
+      }
+    }
+
+    function esc(s) {
+      if (s == null) return '';
+      const div = document.createElement('div');
+      div.textContent = String(s);
+      return div.innerHTML;
+    }
+
+    (async () => {
+      await loadFlows();
+      loadApis();
+    })();
+  </script>
+</body>
+</html>
