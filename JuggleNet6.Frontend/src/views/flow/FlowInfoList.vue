@@ -15,9 +15,12 @@
           </template>
         </el-table-column>
         <el-table-column prop="flowDesc" label="描述" show-overflow-tooltip />
-        <el-table-column label="操作" width="120" fixed="right">
+        <el-table-column label="操作" width="200" fixed="right">
           <template #default="{ row }">
             <el-button size="small" type="primary" link @click="goVersions(row)">版本管理</el-button>
+            <el-tooltip content="复制最新版本调用地址">
+              <el-button size="small" link icon="CopyDocument" @click="copyFlowUrl(row)" />
+            </el-tooltip>
           </template>
         </el-table-column>
       </el-table>
@@ -31,6 +34,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
 import request from '../../utils/request'
 
 const router = useRouter()
@@ -51,6 +55,16 @@ async function loadData() {
 
 function goVersions(row: any) {
   router.push(`/flow/version/${row.flowKey}`)
+}
+
+function copyFlowUrl(row: any) {
+  const baseUrl = window.location.origin
+  const url = `${baseUrl}/open/flow/trigger/${row.flowKey}\nMethod: POST\nHeader: X-Access-Token: <your-token>\nBody: {"flowData": {}}`
+  navigator.clipboard.writeText(url).then(() => {
+    ElMessage.success('调用地址已复制到剪贴板')
+  }).catch(() => {
+    ElMessage.error('复制失败')
+  })
 }
 </script>
 
