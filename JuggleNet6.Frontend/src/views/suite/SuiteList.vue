@@ -3,6 +3,7 @@
     <div class="page-header">
       <h2>套件管理</h2>
       <div style="display:flex;gap:8px">
+        <el-button icon="Download" :disabled="selectedRows.length === 0" @click="generateWord">生成对接文档</el-button>
         <el-button icon="Upload" @click="triggerImport">导入</el-button>
         <el-button type="primary" icon="Plus" @click="openAdd">新建套件</el-button>
       </div>
@@ -23,7 +24,9 @@
     </el-card>
 
     <el-card>
-      <el-table :data="tableData" stripe v-loading="loading">
+      <el-table :data="tableData" stripe v-loading="loading"
+        @selection-change="(rows: any) => selectedRows = rows">
+        <el-table-column type="selection" width="45" />
         <el-table-column prop="suiteCode" label="套件Code" width="220" show-overflow-tooltip />
         <el-table-column prop="suiteName" label="套件名称" />
         <el-table-column prop="suiteVersion" label="版本" width="80" />
@@ -68,10 +71,13 @@ import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '../../utils/request'
+import { Document, Packer, Paragraph, Table, TableRow, TableCell, TextRun, WidthType, HeadingLevel, AlignmentType, BorderStyle } from 'docx'
+import { saveAs } from 'file-saver'
 
 const router = useRouter()
 const loading = ref(false)
 const tableData = ref([])
+const selectedRows = ref<any[]>([])
 const searchForm = reactive({ suiteName: '' })
 const page = reactive({ num: 1, size: 10, total: 0 })
 const dialogVisible = ref(false)
@@ -171,6 +177,86 @@ async function doImport(e: Event) {
     loadData()
   } catch (ex: any) {
     ElMessage.error('导入失败：' + (ex?.message || ex))
+  }
+}
+// ===== 生成对接Word文档 =====
+async function generateWord() {
+  try {
+    const noBorder = { top: { style: BorderStyle.SINGLE, size: 1, color: 'cccccc' }, bottom: { style: BorderStyle.SINGLE, size: 1, color: 'cccccc' }, left: { style: BorderStyle.SINGLE, size: 1, color: 'cccccc' }, right: { style: BorderStyle.SINGLE, size: 1, color: 'cccccc' } }
+    const children: any[] = []
+
+    children.push(new Paragraph({
+      text: 'Juggle 接口编排平台 - 套件接口对接文档',
+      heading: HeadingLevel.TITLE, alignment: AlignmentType.CENTER, spacing: { after: 200 }
+    }))
+    children.push(new Paragraph({
+      text: `生成时间：${new Date().toLocaleString()}`,
+      alignment: AlignmentType.CENTER, spacing: { after: 400 },
+      run: { size: 20, color: '888888' }
+    }))
+
+    for (const suite of selectedRows.value) {
+      // 加载套件下的所有 API
+      const apisRes: any = await request.post('/suite/api/list', { suiteCode: suite.suiteCode })
+      const apis = apisRes.data || []
+
+      children.push(new Paragraph({
+        text: `套件：${suite.suiteName}（${suite.suiteCode}）`,
+        heading: HeadingLevel.HEADING_2, spacing: { before: 300, after: 100 }
+      }))
+      if (suite.suiteDesc) children.push(new Paragraph({ text: `描述：${suite.suiteDesc}`, spacing: { after: 100 } }))
+      children.push(new Paragraph({ text: `版本：${suite.suiteVersion || '-'}`, spacing: { after: 200 } }))
+
+      for (const api of apis) {
+        // 加载 API 的参数
+        let inputParams: any[] = [], outputParams: any[] = [], headerParams: any[] = []
+        try {
+          const infoRes: any = await request.get(`/suite/api/info/${api.id}`)
+          inputParams = infoRes.data?.inputParams || []
+          outputParams = infoRes.data?.outputParams || []
+          headerParams = infoRes.data?.headerParams || []
+        } catch {}
+
+        children.push(new Paragraph({
+          text: `接口：${api.methodName || api.methodCode}`,
+          heading: HeadingLevel.HEADING_3, spacing: { before: 200, after: 100 }
+        }))
+        if (api.methodDesc) children.push(new Paragraph({ text: `描述：${api.methodDesc}`, spacing: { after: 50 } }))
+        children.push(new Paragraph({ text: `请求方式：${api.requestType || 'GET'}    URL：${api.url || '-'}`, spacing: { after: 50 }, run: { font: 'Courier New' } }))
+        children.push(new Paragraph({ text: `Content-Type：${api.contentType || 'JSON'}`, spacing: { after: 150 } }))
+
+        // Header 参数
+        if (headerParams.length > 0) {
+          children.push(new Paragraph({ text: 'Header 参数：', spacing: { after: 50 }, run: { bold: true } }))
+          const hRow = new TableRow({ children: ['参数名', '参数编码', '类型', '默认值'].map(t => new TableCell({ children: [new Paragraph({ text: t, run: { bold: true } })], width: { size: 25, type: WidthType.PERCENTAGE }, borders: noBorder })) })
+          const hRows = headerParams.map((p: any) => new TableRow({ children: [p.paramName || '', p.paramCode || '', p.dataType || '', p.defaultValue || ''].map(t => new TableCell({ children: [new Paragraph({ text: String(t) })], width: { size: 25, type: WidthType.PERCENTAGE }, borders: noBorder })) }))
+          children.push(new Table({ rows: [hRow, ...hRows], width: { size: 100, type: WidthType.PERCENTAGE }))
+        }
+
+        // 入参
+        if (inputParams.length > 0) {
+          children.push(new Paragraph({ text: '入参说明：', spacing: { before: 100, after: 50 }, run: { bold: true } }))
+          const iRow = new TableRow({ children: ['参数名', '参数编码', '数据类型', '必填', '默认值'].map(t => new TableCell({ children: [new Paragraph({ text: t, run: { bold: true } })], width: { size: 20, type: WidthType.PERCENTAGE }, borders: noBorder })) })
+          const iRows = inputParams.map((p: any) => new TableRow({ children: [p.paramName || '', p.paramCode || '', p.dataType || '', p.required === 1 ? '是' : '否', p.defaultValue || ''].map(t => new TableCell({ children: [new Paragraph({ text: String(t) })], width: { size: 20, type: WidthType.PERCENTAGE }, borders: noBorder })) }))
+          children.push(new Table({ rows: [iRow, ...iRows], width: { size: 100, type: WidthType.PERCENTAGE }))
+        }
+
+        // 出参
+        if (outputParams.length > 0) {
+          children.push(new Paragraph({ text: '出参说明：', spacing: { before: 100, after: 50 }, run: { bold: true } }))
+          const oRow = new TableRow({ children: ['参数名', '参数编码', '数据类型', '说明'].map(t => new TableCell({ children: [new Paragraph({ text: t, run: { bold: true } })], width: { size: 25, type: WidthType.PERCENTAGE }, borders: noBorder })) })
+          const oRows = outputParams.map((p: any) => new TableRow({ children: [p.paramName || '', p.paramCode || '', p.dataType || '', p.remark || ''].map(t => new TableCell({ children: [new Paragraph({ text: String(t) })], width: { size: 25, type: WidthType.PERCENTAGE }, borders: noBorder })) }))
+          children.push(new Table({ rows: [oRow, ...oRows], width: { size: 100, type: WidthType.PERCENTAGE }))
+        }
+      }
+    }
+
+    const doc = new Document({ sections: [{ properties: {}, children }] })
+    const blob = await Packer.toBlob(doc)
+    saveAs(blob, `套件接口对接文档_${new Date().toISOString().slice(0,10)}.docx`)
+    ElMessage.success('文档生成成功')
+  } catch (ex: any) {
+    ElMessage.error('生成文档失败：' + (ex?.message || ex))
   }
 }
 </script>
