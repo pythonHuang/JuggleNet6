@@ -1343,10 +1343,9 @@ async function loadStaticVariables() {
 
 async function loadPublishedFlows() {
   try {
-    // 取所有已部署（status=1）的流程定义，排除自身
-    const res: any = await request.post('/flow/definition/page', { pageNum: 1, pageSize: 200 })
-    const records = res.data?.records || []
-    publishedFlows.value = records.filter((f: any) => f.status === 1 && f.flowKey !== flowKey)
+    // 从 FlowInfo 表（已部署的流程）获取，排除自身 flowKey
+    const res: any = await request.post('/flow/info/page', { pageNum: 1, pageSize: 200 })
+    publishedFlows.value = (res.data?.records || []).filter((f: any) => f.flowKey !== flowKey)
   } catch {}
 }
 
