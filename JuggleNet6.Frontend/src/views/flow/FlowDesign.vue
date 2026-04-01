@@ -196,7 +196,11 @@
                   :value="v.variableCode" :label="v.variableCode + ' - ' + v.variableName" />
               </el-select>
               <span style="color:#999;padding:0 4px;flex-shrink:0">→</span>
-              <el-input v-model="rule.target" placeholder="子流程入参名" size="small" style="flex:1" />
+              <el-select v-model="rule.target" placeholder="子流程入参名" size="small" style="flex:1"
+                filterable allow-create default-first-option>
+                <el-option v-for="p in subFlowInputParams" :key="p.paramCode"
+                  :value="p.paramCode" :label="p.paramName + ' (' + p.paramCode + ')'" />
+              </el-select>
               <el-button size="small" type="danger" link icon="Delete"
                 @click="selectedNode.subFlowConfig.inputMappings.splice(idx, 1)" />
             </div>
@@ -211,7 +215,11 @@
             </div>
             <div v-for="(rule, idx) in selectedNode.subFlowConfig.outputMappings" :key="'sub-out-' + idx"
               class="fill-rule-row">
-              <el-input v-model="rule.source" placeholder="子流程输出变量" size="small" style="flex:1" />
+              <el-select v-model="rule.source" placeholder="子流程输出变量" size="small" style="flex:1"
+                filterable allow-create default-first-option>
+                <el-option v-for="p in subFlowOutputParams" :key="p.paramCode"
+                  :value="p.paramCode" :label="p.paramName + ' (' + p.paramCode + ')'" />
+              </el-select>
               <span style="color:#999;padding:0 4px;flex-shrink:0">→</span>
               <el-select v-model="rule.target" placeholder="写入当前流程变量" size="small"
                 filterable allow-create style="flex:1">
@@ -270,7 +278,9 @@
                 <el-option v-for="v in allVariables" :key="v.variableCode" :value="v.variableCode" :label="v.variableCode" />
               </el-select>
               <span class="arrow-icon">→</span>
-              <el-input v-model="rule.target" placeholder="API入参名" size="small" style="width:36%" />
+              <el-select v-model="rule.target" placeholder="API入参名" size="small" style="width:36%" filterable allow-create default-first-option>
+                <el-option v-for="p in selectedApiInputParams" :key="p.paramCode" :value="p.paramCode" :label="`${p.paramName} (${p.paramCode})`" />
+              </el-select>
               <el-button size="small" icon="Delete" circle type="danger" @click="selectedNode.method!.inputFillRules.splice(i, 1)" />
             </div>
 
@@ -280,7 +290,9 @@
               <el-button size="small" icon="Plus" link @click="addFillRule('output')" style="margin-left:auto">添加</el-button>
             </div>
             <div v-for="(rule, i) in selectedNode.method?.outputFillRules" :key="'o'+i" class="fill-rule-row">
-              <el-input v-model="rule.source" placeholder="响应字段path" size="small" style="flex:1" />
+              <el-select v-model="rule.source" placeholder="响应字段path" size="small" style="flex:1" filterable allow-create default-first-option>
+                <el-option v-for="p in selectedApiOutputParams" :key="p.paramCode" :value="p.paramCode" :label="`${p.paramName} (${p.paramCode})`" />
+              </el-select>
               <span class="arrow-icon">→</span>
               <el-select v-model="rule.targetType" size="small" style="width:80px;flex-shrink:0">
                 <el-option value="VARIABLE" label="变量" />
@@ -763,6 +775,12 @@ const dataSources = ref<any[]>([])
 const methodApiSelection = ref<any[]>([])
 // 已发布的流程列表（供 SUB_FLOW 节点选择）
 const publishedFlows = ref<any[]>([])
+// METHOD 节点选中 API 的入参/出参（供下拉选择）
+const selectedApiInputParams = ref<any[]>([])
+const selectedApiOutputParams = ref<any[]>([])
+// SUB_FLOW 节点选中子流程的入参/出参（供下拉选择）
+const subFlowInputParams = ref<any[]>([])
+const subFlowOutputParams = ref<any[]>([])
 
 // ====== VueFlow 节点/边 ======
 const vfNodes = ref<any[]>([])
@@ -916,10 +934,40 @@ const otherNodes = computed(() => businessNodes.value.filter(n => n.key !== sele
 watch(selectedNode, (node) => {
   if (node?.elementType === 'METHOD' && node.method?.suiteCode && node.method?.methodCode) {
     methodApiSelection.value = [node.method.suiteCode, node.method.methodCode]
+    // 加载 API 入参/出参
+    const suiteOption = apiOptions.value.find(s => s.value === node.method.suiteCode)
+    const apiOption = suiteOption?.children?.find((a: any) => a.value === node.method.methodCode)
+    if (apiOption?.api?.id) loadApiParams(apiOption.api.id)
   } else {
     methodApiSelection.value = []
+    selectedApiInputParams.value = []
+    selectedApiOutputParams.value = []
+  }
+  // SUB_FLOW 节点：选中时加载子流程的入参/出参
+  if (node?.elementType === 'SUB_FLOW' && node.subFlowConfig?.subFlowKey) {
+    loadSubFlowParams(node.subFlowConfig.subFlowKey)
+  } else if (node?.elementType !== 'SUB_FLOW') {
+    subFlowInputParams.value = []
+    subFlowOutputParams.value = []
   }
 })
+
+// 监听子流程 key 变化，自动加载入参/出参
+watch(() => selectedNode.value?.subFlowConfig?.subFlowKey, (newKey) => {
+  if (newKey) loadSubFlowParams(newKey)
+})
+
+async function loadSubFlowParams(flowKey: string) {
+  try {
+    // 查询子流程的最新版本对应的流程定义入参/出参
+    const defRes: any = await request.get(`/flow/definition/infoByKey/${flowKey}`)
+    subFlowInputParams.value = defRes.data?.inputParams || []
+    subFlowOutputParams.value = defRes.data?.outputParams || []
+  } catch {
+    subFlowInputParams.value = []
+    subFlowOutputParams.value = []
+  }
+}
 
 // ====== 键盘事件 ======
 function onDeleteKey(e: KeyboardEvent) {
@@ -1445,6 +1493,19 @@ function onApiSelect(val: any[]) {
       suiteCode, methodCode: api.methodCode, url: api.url,
       requestType: api.requestType, contentType: api.contentType
     })
+    // 加载 API 的入参/出参供下拉选择
+    loadApiParams(api.id)
+  }
+}
+
+async function loadApiParams(apiId: number) {
+  try {
+    const res: any = await request.get(`/suite/api/info/${apiId}`)
+    selectedApiInputParams.value = res.data?.inputParams || []
+    selectedApiOutputParams.value = res.data?.outputParams || []
+  } catch {
+    selectedApiInputParams.value = []
+    selectedApiOutputParams.value = []
   }
 }
 
