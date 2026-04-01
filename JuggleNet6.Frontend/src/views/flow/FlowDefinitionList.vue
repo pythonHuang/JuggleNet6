@@ -3,6 +3,7 @@
     <div class="page-header">
       <h2>流程定义</h2>
       <div style="display:flex;gap:8px">
+        <el-button icon="Download" :disabled="selectedRows.length === 0" @click="generateWord">生成对接文档</el-button>
         <el-button icon="Upload" @click="triggerImport">导入</el-button>
         <el-button type="primary" icon="Plus" @click="openAdd">新建流程</el-button>
       </div>
@@ -25,7 +26,9 @@
 
     <!-- 表格 -->
     <el-card>
-      <el-table :data="tableData" stripe v-loading="loading" style="width:100%">
+      <el-table :data="tableData" stripe v-loading="loading" style="width:100%"
+        @selection-change="(rows: any) => selectedRows = rows">
+        <el-table-column type="selection" width="45" />
         <el-table-column prop="flowKey" label="流程Key" width="200" show-overflow-tooltip />
         <el-table-column prop="flowName" label="流程名称" />
         <el-table-column prop="flowType" label="类型" width="80">
@@ -88,10 +91,13 @@ import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '../../utils/request'
+import { Document, Packer, Paragraph, Table, TableRow, TableCell, TextRun, WidthType, HeadingLevel, AlignmentType, BorderStyle } from 'docx'
+import { saveAs } from 'file-saver'
 
 const router = useRouter()
 const loading = ref(false)
 const tableData = ref([])
+const selectedRows = ref<any[]>([])
 const searchForm = reactive({ flowName: '' })
 const page = reactive({ num: 1, size: 10, total: 0 })
 const dialogVisible = ref(false)
@@ -203,6 +209,116 @@ async function doImport(e: Event) {
     loadData()
   } catch (ex: any) {
     ElMessage.error('导入失败：' + (ex?.message || ex))
+  }
+}
+// ===== 生成对接Word文档 =====
+async function generateWord() {
+  try {
+    const docData: any[] = []
+    for (const row of selectedRows.value) {
+      const res: any = await request.get(`/flow/definition/info/${row.id}`)
+      const d = res.data
+      docData.push({
+        flowKey: d.definition?.flowKey || row.flowKey,
+        flowName: d.definition?.flowName || row.flowName,
+        flowDesc: d.definition?.flowDesc || row.flowDesc || '',
+        flowType: d.definition?.flowType || row.flowType || 'sync',
+        inputParams: d.inputParams || [],
+        outputParams: d.outputParams || [],
+        variables: d.variables || []
+      })
+    }
+
+    const children: any[] = []
+    // 标题
+    children.push(new Paragraph({
+      text: 'Juggle 接口编排平台 - 流程对接文档',
+      heading: HeadingLevel.TITLE,
+      alignment: AlignmentType.CENTER,
+      spacing: { after: 200 }
+    }))
+    children.push(new Paragraph({
+      text: `生成时间：${new Date().toLocaleString()}`,
+      alignment: AlignmentType.CENTER,
+      spacing: { after: 400 },
+      run: { size: 20, color: '888888' }
+    }))
+
+    const noBorder = { top: { style: BorderStyle.SINGLE, size: 1, color: 'cccccc' }, bottom: { style: BorderStyle.SINGLE, size: 1, color: 'cccccc' }, left: { style: BorderStyle.SINGLE, size: 1, color: 'cccccc' }, right: { style: BorderStyle.SINGLE, size: 1, color: 'cccccc' } }
+
+    for (const flow of docData) {
+      // 流程标题
+      children.push(new Paragraph({
+        text: `流程：${flow.flowName}（${flow.flowKey}）`,
+        heading: HeadingLevel.HEADING_2,
+        spacing: { before: 300, after: 100 }
+      }))
+      if (flow.flowDesc) children.push(new Paragraph({ text: `描述：${flow.flowDesc}`, spacing: { after: 100 } }))
+      children.push(new Paragraph({ text: `类型：${flow.flowType === 'sync' ? '同步' : '异步'}`, spacing: { after: 100 } }))
+      children.push(new Paragraph({ text: `调用地址：POST /open/flow/trigger/${flow.flowKey}`, spacing: { after: 100 }, run: { font: 'Courier New' } }))
+      children.push(new Paragraph({ text: `请求头：X-Access-Token: <token>`, spacing: { after: 200 } }))
+
+      // 入参表格
+      if (flow.inputParams.length > 0) {
+        children.push(new Paragraph({ text: '入参说明：', heading: HeadingLevel.HEADING_3, spacing: { before: 200, after: 100 } }))
+        const headerRow = new TableRow({
+          children: ['参数名', '参数编码', '数据类型', '必填', '默认值', '说明'].map(t =>
+            new TableCell({ children: [new Paragraph({ text: t, run: { bold: true } })], width: { size: t === '说明' ? 3000 : 1600, type: WidthType.DXA }, borders: noBorder })
+          )
+        })
+        const paramRows = flow.inputParams.map((p: any) =>
+          new TableRow({
+            children: [p.paramName || '', p.paramCode || '', p.dataType || '', p.required === 1 ? '是' : '否', p.defaultValue || '', p.remark || ''].map(t =>
+              new TableCell({ children: [new Paragraph({ text: String(t) })], width: { size: 1600, type: WidthType.DXA }, borders: noBorder })
+            )
+          })
+        )
+        children.push(new Table({ rows: [headerRow, ...paramRows], width: { size: 100, type: WidthType.PERCENTAGE }))
+      }
+
+      // 出参表格
+      if (flow.outputParams.length > 0) {
+        children.push(new Paragraph({ text: '出参说明：', heading: HeadingLevel.HEADING_3, spacing: { before: 200, after: 100 } }))
+        const headerRow = new TableRow({
+          children: ['参数名', '参数编码', '数据类型', '说明'].map(t =>
+            new TableCell({ children: [new Paragraph({ text: t, run: { bold: true } })], width: { size: t === '说明' ? 4000 : 2000, type: WidthType.DXA }, borders: noBorder })
+          )
+        })
+        const paramRows = flow.outputParams.map((p: any) =>
+          new TableRow({
+            children: [p.paramName || '', p.paramCode || '', p.dataType || '', p.remark || ''].map(t =>
+              new TableCell({ children: [new Paragraph({ text: String(t) })], width: { size: 2000, type: WidthType.DXA }, borders: noBorder })
+            )
+          })
+        )
+        children.push(new Table({ rows: [headerRow, ...paramRows], width: { size: 100, type: WidthType.PERCENTAGE }))
+      }
+
+      // 变量表格
+      if (flow.variables.length > 0) {
+        children.push(new Paragraph({ text: '内部变量：', heading: HeadingLevel.HEADING_3, spacing: { before: 200, after: 100 } }))
+        const headerRow = new TableRow({
+          children: ['变量名', '变量编码', '数据类型', '默认值'].map(t =>
+            new TableCell({ children: [new Paragraph({ text: t, run: { bold: true } })], width: { size: 25, type: WidthType.PERCENTAGE }, borders: noBorder })
+          )
+        })
+        const varRows = flow.variables.map((v: any) =>
+          new TableRow({
+            children: [v.variableName || '', v.variableCode || '', v.dataType || '', v.defaultValue || ''].map(t =>
+              new TableCell({ children: [new Paragraph({ text: String(t) })], width: { size: 25, type: WidthType.PERCENTAGE }, borders: noBorder })
+            )
+          })
+        )
+        children.push(new Table({ rows: [headerRow, ...varRows], width: { size: 100, type: WidthType.PERCENTAGE }))
+      }
+    }
+
+    const doc = new Document({ sections: [{ properties: {}, children }] })
+    const blob = await Packer.toBlob(doc)
+    saveAs(blob, `流程对接文档_${new Date().toISOString().slice(0,10)}.docx`)
+    ElMessage.success('文档生成成功')
+  } catch (ex: any) {
+    ElMessage.error('生成文档失败：' + (ex?.message || ex))
   }
 }
 </script>
