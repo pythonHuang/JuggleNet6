@@ -17,9 +17,12 @@
           </template>
         </el-table-column>
         <el-table-column prop="createdAt" label="创建时间" width="180" show-overflow-tooltip />
-        <el-table-column label="操作" width="200" fixed="right">
+        <el-table-column label="操作" width="260" fixed="right">
           <template #default="{ row }">
             <el-button size="small" type="primary" link @click="triggerTest(row)">触发测试</el-button>
+            <el-tooltip content="复制此版本调用地址">
+              <el-button size="small" link icon="CopyDocument" @click="copyVersionUrl(row)" />
+            </el-tooltip>
             <el-button size="small" :type="row.status === 1 ? 'warning' : 'success'" link
               @click="toggleStatus(row)">
               {{ row.status === 1 ? '禁用' : '启用' }}
@@ -73,6 +76,16 @@ async function triggerTest(row: any) {
   const res: any = await request.post(`/flow/version/trigger/${row.version}/${flowKey}`, { params: {} })
   ElMessage.success('触发成功，请查看控制台输出')
   console.log('流程执行结果:', res.data)
+}
+
+function copyVersionUrl(row: any) {
+  const baseUrl = window.location.origin
+  const url = `${baseUrl}/open/flow/trigger/${row.version}/${flowKey}\nMethod: POST\nHeader: X-Access-Token: <your-token>\nBody: {"flowData": {}}`
+  navigator.clipboard.writeText(url).then(() => {
+    ElMessage.success('调用地址已复制到剪贴板')
+  }).catch(() => {
+    ElMessage.error('复制失败')
+  })
 }
 </script>
 
