@@ -1,8 +1,8 @@
 # Juggle 接口编排平台 - 系统详细设计文档
 
-> 版本：v1.0  
-> 日期：2026-03-24  
-> 技术栈：ASP.NET Core 6 + Vue3 + SQLite + EF Core
+> 版本：v1.5  
+> 日期：2026-04-01  
+> 技术栈：ASP.NET Core 8 + Vue3 + SQLite + EF Core（DDD 四层架构）
 
 ---
 
@@ -256,6 +256,62 @@ CREATE TABLE t_data_source (
 );
 ```
 
+### 1.12 t_flow_log（流程执行主日志表）
+
+```sql
+CREATE TABLE t_flow_log (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    flow_key        TEXT(20),           -- 流程唯一标识
+    flow_version    TEXT(8),            -- 执行版本号
+    status          TEXT(10),           -- SUCCESS / FAILED
+    execute_time    INTEGER,            -- 执行耗时（ms）
+    inputs          TEXT,               -- 入参 JSON 快照
+    outputs         TEXT,               -- 出参 JSON 快照
+    error_message   TEXT,               -- 错误信息（失败时）
+    created_at      TEXT
+);
+```
+
+### 1.13 t_flow_node_log（节点执行明细日志表）
+
+```sql
+CREATE TABLE t_flow_node_log (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    flow_log_id     INTEGER,            -- 所属主日志 ID
+    node_key        TEXT(20),           -- 节点 key
+    node_type       TEXT(20),           -- 节点类型（START/END/METHOD等）
+    seq             INTEGER,            -- 执行顺序序号
+    status          TEXT(10),           -- SUCCESS / FAILED
+    execution_time  INTEGER,            -- 节点耗时（ms）
+    input_snapshot  TEXT,               -- 节点执行前变量快照（JSON）
+    output_snapshot TEXT,               -- 节点执行后变量快照（JSON）
+    detail          TEXT,               -- 节点执行详情
+    error_message   TEXT,               -- 节点错误信息
+    start_time      TEXT,
+    end_time        TEXT
+);
+```
+
+### 1.14 t_static_variable（全局静态变量表）
+
+```sql
+CREATE TABLE t_static_variable (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    var_code        TEXT(30) UNIQUE,    -- 变量唯一标识
+    var_name        TEXT(50),           -- 变量名称
+    data_type       TEXT(20),           -- string/integer/double/boolean/date/json
+    value           TEXT,               -- 当前值
+    default_value   TEXT,               -- 默认值
+    group_name      TEXT(50),           -- 分组名称（可为空）
+    remark          TEXT(200),          -- 备注
+    deleted         INTEGER DEFAULT 0,
+    created_at      TEXT,
+    created_by      INTEGER,
+    updated_at      TEXT,
+    updated_by      INTEGER
+);
+```
+
 ---
 
 ## 二、后端 API 详细设计
@@ -363,21 +419,23 @@ Authorization: Bearer eyJ...
 ### 3.2 流程执行（触发）详细设计
 
 ```
-触发接口：POST /api/flow/version/trigger/{version}/{key}
-开放接口：POST /open/flow/trigger/{version}/{key}
+触发接口（带版本）：POST /api/flow/version/trigger/{version}/{key}
+开放接口（带版本）：GET/POST /open/flow/trigger/{version}/{key}
+开放接口（不带版本，取最新已发布版本）：GET/POST /open/flow/trigger/{key}
 
 执行步骤：
 1. 根据 flow_key + flow_version 查询 t_flow_version
+   （不带版本号时：查询 flow_version_status=1 的最新版本）
 2. 检查版本状态（必须为启用状态）
 3. 反序列化 flow_content → List<FlowElement>
 4. 反序列化 variables → 初始化变量上下文
 5. 反序列化 inputs → 验证并填充输入变量到上下文
 6. 从 START 节点开始执行（findNextNode）
-7. 循环执行节点直到 END：
-   - METHOD: 发起 HTTP 请求，结果填充变量
-   - CONDITION: 计算条件表达式，找到下一个节点
+7. 循环执行节点直到 END（见节点类型说明）
 8. 从变量上下文中读取 outputs 对应的变量值
-9. 构建并返回 FlowResult
+9. 保存执行日志（t_flow_log + t_flow_node_log）
+10. 回写被修改的静态变量到 t_static_variable
+11. 构建并返回 FlowResult
 ```
 
 ### 3.3 流程引擎 C# 核心类设计
@@ -446,6 +504,66 @@ public class FillRule
     public DataType TargetDataType { get; set; }
 }
 
+// 赋值节点
+public class AssignNode : FlowNode
+{
+    public List<AssignRule> AssignRules { get; set; }
+}
+
+public class AssignRule
+{
+    public string Source { get; set; }        // 来源值（变量key或常量值）
+    public string SourceType { get; set set; }  // CONSTANT / VARIABLE / STATIC
+    public string Target { get; set; }        // 目标变量 key
+    public string TargetType { get; set; }    // VARIABLE / STATIC
+    public string DataType { get; set; }      // string/integer/double/boolean/date
+}
+
+// 代码节点
+public class CodeNode : FlowNode
+{
+    public CodeConfig CodeConfig { get; set; }
+}
+
+public class CodeConfig
+{
+    public string ScriptType { get; set; }   // javascript
+    public string Script { get; set; }       // JS 代码（支持 $var / $static 对象）
+}
+
+// 数据库节点
+public class MysqlNode : FlowNode
+{
+    public MysqlConfig MysqlConfig { get; set; }
+}
+
+public class MysqlConfig
+{
+    public long DataSourceId { get; set; }   // 数据源 ID
+    public string SqlType { get; set; }      // SELECT / UPDATE / INSERT / DELETE
+    public string Sql { get; set; }          // SQL 模板，支持 ${varName} 替换
+    public List<OutputFillRule> OutputFillRules { get; set; }
+}
+
+// 子流程节点（迭代五新增）
+public class SubFlowNode : FlowNode
+{
+    public SubFlowConfig SubFlowConfig { get; set; }
+}
+
+public class SubFlowConfig
+{
+    public string SubFlowKey { get; set; }               // 被调用的子流程 key
+    public List<SubFlowMapping> InputMappings { get; set; }   // 入参映射（当前变量→子流程入参）
+    public List<SubFlowMapping> OutputMappings { get; set; }  // 出参映射（子流程出参→当前变量）
+}
+
+public class SubFlowMapping
+{
+    public string Source { get; set; }   // 来源变量 key
+    public string Target { get; set; }   // 目标变量 key
+}
+
 // 流程引擎
 public class FlowEngine
 {
@@ -510,8 +628,13 @@ C# 实现方案：使用 `System.Linq.Dynamic.Core` 库或手动解析 `conditio
 **节点列表（左侧面板）：**
 - 开始节点（只能有一个）
 - 结束节点
-- 方法节点（调用 API）
+- 方法节点（调用 HTTP API）
 - 条件节点（多分支判断）
+- 赋值节点（变量赋值/类型转换，支持静态变量读写）
+- 代码节点（执行 JavaScript 脚本，支持 `$var`/`$static` 对象）
+- 数据库节点（SQL 查询，支持 `${varName}` 模板替换）
+- 聚合节点（多分支汇聚）
+- **子流程节点**（调用已发布的其他流程，支持入参/出参变量映射）
 
 **画布区：**
 - 节点拖拽放置
@@ -703,13 +826,17 @@ interface OutputFillRule {
 
 ### 5.6 触发流程（开放接口）
 
-**接口：** `POST /open/flow/trigger/{version}/{key}`
+**接口（带版本号）：** `GET/POST /open/flow/trigger/{version}/{key}`
 
-**示例：** `POST /open/flow/trigger/v1/sync_abcdefghij`
+**接口（不带版本号，自动取最新已发布版本）：** `GET/POST /open/flow/trigger/{key}`
+
+**示例：** 
+- `POST /open/flow/trigger/v1/sync_abcdefghij`
+- `POST /open/flow/trigger/sync_abcdefghij`
 
 **请求头：**
 ```
-X-Juggle-Token: your-api-token
+X-Access-Token: your-api-token
 Content-Type: application/json
 ```
 
@@ -735,16 +862,6 @@ Content-Type: application/json
       "age": 18,
       "orderName": "送一双耐克的鞋"
     }
-  }
-}
-```
-
-**异步响应：**
-```json
-{
-  "code": 200,
-  "data": {
-    "instanceId": "flow-instance-uuid"
   }
 }
 ```
@@ -817,137 +934,184 @@ Content-Type: application/json
 }
 ```
 
+### 5.10 流程定义导出
+
+**接口：** `GET /api/flow/definition/export/{id}`
+
+**响应：** 触发浏览器下载 JSON 文件，文件名格式 `flow_{flowKey}.json`
+
+**导出文件结构：**
+```json
+{
+  "exportType": "flow",
+  "flowKey": "sync_abcdefghij",
+  "flowName": "示例流程",
+  "flowType": "sync",
+  "flowContent": "[{...节点列表...}]",
+  "inputs": [...],
+  "outputs": [...],
+  "variables": [...]
+}
+```
+
+### 5.11 流程定义导入
+
+**接口：** `POST /api/flow/definition/import`
+
+**请求：** 上传 JSON 文件（multipart/form-data，字段名 `file`）
+
+**导入规则：**
+- 校验 `exportType == "flow"`
+- 自动生成新 flowKey（避免与已有流程冲突）
+- 流程名自动添加 `_imported` 后缀标识
+
+**响应：**
+```json
+{ "code": 200, "data": true }
+```
+
+### 5.12 套件导出
+
+**接口：** `GET /api/suite/export/{id}`
+
+**导出文件结构：**
+```json
+{
+  "exportType": "suite",
+  "suiteName": "示例套件",
+  "suiteVersion": "v1.0.0",
+  "apis": [
+    {
+      "apiName": "接口名",
+      "apiUrl": "https://...",
+      "apiRequestType": "POST",
+      "inputs": [...],
+      "outputs": [...],
+      "headers": [...]
+    }
+  ]
+}
+```
+
+### 5.13 套件导入
+
+**接口：** `POST /api/suite/import`
+
+**请求：** 上传 JSON 文件（multipart/form-data，字段名 `file`）
+
+**导入规则：**
+- 校验 `exportType == "suite"`
+- 自动生成新 suiteCode 和各接口 methodCode
+- 完整导入接口的入参/出参/Header 参数
+
+### 5.14 流程调试（改进版）
+
+**接口：** `POST /api/flow/definition/debug/{flowKey}`
+
+**响应（统一返回 HTTP 200）：**
+```json
+{
+  "code": 200,
+  "data": {
+    "success": true,
+    "errorMessage": null,
+    "outputs": { "orderName": "送10元话费" },
+    "nodeLogs": [
+      {
+        "nodeKey": "n1",
+        "nodeType": "START",
+        "seq": 1,
+        "status": "SUCCESS",
+        "executionTime": 2,
+        "inputSnapshot": "{}",
+        "outputSnapshot": "{}",
+        "startTime": "2026-04-01T10:00:00",
+        "endTime": "2026-04-01T10:00:00.002"
+      }
+    ]
+  }
+}
+```
+
+> 失败时 `success=false`，`errorMessage` 包含错误详情，`nodeLogs` 中失败节点的 `status=FAILED` 且含 `errorMessage`，前端据此高亮红色并显示错误提示。
+
+### 5.15 全局静态变量管理
+
+| 接口 | 方法 | 说明 |
+|------|------|------|
+| `/api/system/static-variable/list` | GET | 查询静态变量列表 |
+| `/api/system/static-variable/add` | POST | 新增静态变量 |
+| `/api/system/static-variable/update/{id}` | PUT | 编辑静态变量 |
+| `/api/system/static-variable/delete/{id}` | DELETE | 删除静态变量 |
+| `/api/system/static-variable/reset/{id}` | POST | 重置当前值为默认值 |
+
 ---
 
 ## 六、C# 项目结构详细设计
 
+> 本项目采用 DDD 四层架构，已从原始单体结构迁移完成。
+
 ### 6.1 后端项目结构
 
 ```
-JuggleNet6.Backend/
-├── Program.cs                          # 应用入口，最小托管模型
-├── appsettings.json                    # 配置文件
-├── JuggleNet6.Backend.csproj
+JuggleNet6/
+├── Juggle.Api/                             # 入口层
+│   ├── Controllers/
+│   │   ├── Api/                            # 业务管理接口（JWT认证）
+│   │   │   ├── FlowDefinitionController.cs # 流程定义（含导入导出）
+│   │   │   ├── FlowInfoController.cs
+│   │   │   ├── FlowVersionController.cs
+│   │   │   ├── FlowLogController.cs        # 执行日志查询
+│   │   │   ├── ApiController.cs
+│   │   │   ├── SuiteController.cs          # 套件管理（含导入导出）
+│   │   │   ├── ObjectController.cs
+│   │   │   ├── ParameterController.cs
+│   │   │   ├── VariableInfoController.cs
+│   │   │   ├── StaticVariableController.cs # 全局静态变量
+│   │   │   ├── DataSourceController.cs
+│   │   │   ├── TokenController.cs
+│   │   │   └── UserController.cs
+│   │   └── Open/
+│   │       └── FlowOpenController.cs       # 开放触发接口（带版本/不带版本）
+│   ├── wwwroot/                            # 前端构建产物
+│   └── Program.cs
 │
-├── Controllers/                        # 接口层
-│   ├── Api/
-│   │   ├── FlowDefinitionController.cs
-│   │   ├── FlowInfoController.cs
-│   │   ├── FlowVersionController.cs
-│   │   ├── ApiController.cs
-│   │   ├── SuiteController.cs
-│   │   ├── ObjectController.cs
-│   │   ├── TokenController.cs
-│   │   ├── DataSourceController.cs
-│   │   ├── UserController.cs
-│   │   └── DataTypeInfoController.cs
-│   ├── Open/
-│   │   └── FlowOpenController.cs
-│   └── Example/
-│       ├── UserExampleController.cs
-│       ├── GoodsExampleController.cs
-│       └── OrderExampleController.cs
+├── Juggle.Application/                     # 应用层
+│   ├── Services/
+│   │   ├── Flow/
+│   │   │   └── FlowExecutionService.cs    # 流程执行核心服务
+│   │   └── Impl/
+│   │       ├── DataSourceService.cs        # 数据源连接字符串构建+测试
+│   │       └── JwtService.cs
+│   └── Models/
+│       ├── Request/Requests.cs             # 所有请求 DTO
+│       └── Response/ApiResult.cs          # 统一响应模型
 │
-├── Services/                           # 应用服务层（接口 + 实现）
-│   ├── Flow/
-│   │   ├── IFlowDefinitionService.cs
-│   │   ├── FlowDefinitionService.cs
-│   │   ├── IFlowVersionService.cs
-│   │   ├── FlowVersionService.cs
-│   │   └── IFlowInfoService.cs
-│   ├── Suite/
-│   │   ├── IApiService.cs
-│   │   ├── ApiService.cs
-│   │   ├── ISuiteService.cs
-│   │   └── SuiteService.cs
-│   ├── IObjectService.cs
-│   ├── ObjectService.cs
-│   ├── ITokenService.cs
-│   ├── TokenService.cs
-│   ├── IDataSourceService.cs
-│   ├── DataSourceService.cs
-│   └── IUserService.cs
+├── Juggle.Domain/                          # 领域层
+│   ├── Entities/                           # 15个数据库实体
+│   └── Engine/                             # 流程引擎
+│       ├── FlowEngine.cs                   # 引擎入口（支持flowContentLoader）
+│       ├── FlowContext.cs                  # 执行上下文（含静态变量/节点日志）
+│       ├── FlowModels.cs                   # 节点模型定义
+│       └── NodeExecutors/                  # 9个节点执行器
+│           ├── StartNodeExecutor.cs
+│           ├── EndNodeExecutor.cs
+│           ├── MethodNodeExecutor.cs
+│           ├── ConditionNodeExecutor.cs
+│           ├── MergeNodeExecutor.cs
+│           ├── AssignNodeExecutor.cs       # 支持STATIC变量读写
+│           ├── CodeNodeExecutor.cs         # 支持$var/$static对象
+│           ├── MysqlNodeExecutor.cs        # 多数据库支持
+│           └── SubFlowNodeExecutor.cs      # 子流程递归执行（迭代五新增）
 │
-├── Domain/                             # 领域层
-│   ├── Flow/
-│   │   ├── FlowDefinition.cs           # 流程定义领域模型
-│   │   ├── FlowVersion.cs
-│   │   ├── FlowInfo.cs
-│   │   └── FlowTypeEnum.cs
-│   ├── Suite/
-│   │   ├── Api.cs
-│   │   ├── Suite.cs
-│   │   └── RequestTypeEnum.cs
-│   ├── Object.cs
-│   ├── Parameter.cs
-│   ├── VariableInfo.cs
-│   ├── Token.cs
-│   ├── DataSource.cs
-│   └── Engine/                         # 流程引擎核心
-│       ├── FlowEngine.cs
-│       ├── FlowExecutionContext.cs
-│       ├── Models/
-│       │   ├── FlowElement.cs
-│       │   ├── StartNode.cs
-│       │   ├── EndNode.cs
-│       │   ├── MethodNode.cs
-│       │   ├── ConditionNode.cs
-│       │   ├── MethodConfig.cs
-│       │   ├── FillRule.cs
-│       │   ├── DataType.cs
-│       │   ├── Variable.cs
-│       │   └── FlowResult.cs
-│       ├── Executors/
-│       │   ├── INodeExecutor.cs
-│       │   ├── StartNodeExecutor.cs
-│       │   ├── EndNodeExecutor.cs
-│       │   ├── MethodNodeExecutor.cs
-│       │   └── ConditionNodeExecutor.cs
-│       └── Expression/
-│           └── ExpressionEvaluator.cs
-│
-├── Infrastructure/                     # 基础设施层
-│   ├── Persistence/
-│   │   ├── JuggleDbContext.cs           # EF Core DbContext
-│   │   ├── Entities/                    # 数据库实体（与 Domain 分离）
-│   │   │   ├── UserEntity.cs
-│   │   │   ├── SuiteEntity.cs
-│   │   │   ├── ApiEntity.cs
-│   │   │   ├── ParameterEntity.cs
-│   │   │   ├── ObjectEntity.cs
-│   │   │   ├── FlowDefinitionEntity.cs
-│   │   │   ├── VariableInfoEntity.cs
-│   │   │   ├── FlowInfoEntity.cs
-│   │   │   ├── FlowVersionEntity.cs
-│   │   │   ├── TokenEntity.cs
-│   │   │   └── DataSourceEntity.cs
-│   │   └── Repositories/               # 仓储实现
-│   │       ├── FlowDefinitionRepository.cs
-│   │       ├── FlowVersionRepository.cs
-│   │       └── ...
-│   ├── Http/
-│   │   └── HttpApiCaller.cs
-│   └── Common/
-│       ├── JsonHelper.cs
-│       └── Md5Helper.cs
-│
-├── DTOs/                               # 数据传输对象
-│   ├── Request/                        # 请求 DTO
-│   │   ├── LoginRequest.cs
-│   │   ├── FlowDefinitionAddRequest.cs
-│   │   └── ...
-│   └── Response/                       # 响应 DTO
-│       ├── ApiResult.cs                # 统一响应包装
-│       ├── PageResult.cs               # 分页响应
-│       ├── FlowDefinitionDto.cs
-│       └── ...
-│
-├── Middleware/                         # 中间件
-│   ├── AuthMiddleware.cs               # JWT 认证
-│   └── ExceptionMiddleware.cs          # 全局异常处理
-│
-└── Migrations/                         # EF Core 迁移文件
+└── Juggle.Infrastructure/                  # 基础设施层
+    ├── Persistence/JuggleDbContext.cs      # EF Core DbContext
+    └── Common/
+        ├── JsonHelper.cs
+        └── Md5Helper.cs
 ```
+
+
 
 ### 6.2 前端项目结构
 
@@ -955,104 +1119,36 @@ JuggleNet6.Backend/
 JuggleNet6.Frontend/
 ├── index.html
 ├── package.json
-├── tsconfig.json
 ├── vite.config.ts
-├── env.d.ts
 │
 └── src/
     ├── App.vue
     ├── main.ts
     │
-    ├── views/                          # 页面视图
+    ├── views/
     │   ├── LoginView.vue
     │   ├── LayoutView.vue
     │   ├── flow/
-    │   │   ├── FlowDefineList.vue      # 流程定义列表
-    │   │   ├── FlowList.vue            # 流程列表
-    │   │   ├── FlowVersionList.vue     # 版本列表
-    │   │   ├── FlowDebug.vue           # 流程调试
-    │   │   ├── FlowDesign.vue          # 流程设计器入口
-    │   │   ├── define/                 # 流程定义子组件
-    │   │   └── design/                 # 流程设计器核心
-    │   │       ├── components/
-    │   │       │   ├── AddNodeModal.vue
-    │   │       │   ├── ConditionFilterModal.vue
-    │   │       │   ├── EditNodeDrawer.vue
-    │   │       │   ├── left-menu/
-    │   │       │   │   ├── LeftMenu.vue
-    │   │       │   │   ├── ParamSettingModal.vue
-    │   │       │   │   └── VariableSetting.vue
-    │   │       │   └── node-form/
-    │   │       │       ├── MethodForm.vue
-    │   │       │       └── ConditionForm.vue
-    │   │       ├── renderer/           # 流程图渲染器
-    │   │       └── data/               # 数据模型
+    │   │   ├── FlowDefinitionList.vue  # 流程定义列表（含导入/导出）
+    │   │   ├── FlowDesign.vue          # 流程设计器（9种节点，调试，自动布局）
+    │   │   ├── FlowLog.vue             # 执行日志（节点时间轴+变量快照）
+    │   │   └── FlowVersionList.vue     # 版本列表（启用/禁用）
     │   ├── suite/
-    │   │   ├── SuiteList.vue
-    │   │   ├── ApiList.vue
-    │   │   └── ApiDebug.vue
+    │   │   ├── SuiteList.vue           # 套件列表（含导入/导出）
+    │   │   └── ApiDetail.vue           # 接口入参/出参/Header管理
     │   ├── object/
     │   │   └── ObjectList.vue
-    │   ├── market/
-    │   │   ├── SuiteMarket.vue
-    │   │   └── TemplateMarket.vue
     │   └── system/
     │       ├── TokenList.vue
-    │       └── DataSourceList.vue
+    │       ├── DataSourceList.vue      # 四类数据库，测试连接
+    │       └── StaticVariable.vue      # 全局静态变量管理
     │
-    ├── components/                     # 可复用组件
-    │   ├── common/
-    │   │   ├── CodeEditor.vue          # Monaco 代码编辑器
-    │   │   ├── DataTypeDisplay.vue     # 数据类型展示
-    │   │   ├── VariableSelect.vue      # 变量选择器
-    │   │   └── ResizableDrawer.vue     # 可拖拽抽屉
-    │   ├── form/
-    │   │   ├── DataTypeSelect.vue      # 数据类型选择器
-    │   │   ├── ParamSetting.vue        # 参数配置
-    │   │   ├── InputRuleSetting.vue    # 输入规则配置
-    │   │   ├── OutputRuleSetting.vue   # 输出规则配置
-    │   │   ├── ApiSelect.vue           # API 选择器
-    │   │   └── SuiteSelect.vue         # 套件选择器
-    │   └── filter/
-    │       ├── FilterGroup.vue         # 条件表达式组
-    │       ├── FilterItem.vue          # 单条件表达式
-    │       └── FilterValue.vue         # 条件值输入
-    │
-    ├── service/                        # API 服务层
-    │   ├── base/
-    │   │   └── index.ts                # Axios 封装（统一请求/响应处理）
-    │   ├── api/
-    │   │   ├── flow.ts
-    │   │   ├── flowDefine.ts
-    │   │   ├── flowVersion.ts
-    │   │   ├── suite.ts
-    │   │   ├── api.ts
-    │   │   ├── object.ts
-    │   │   ├── token.ts
-    │   │   ├── dataSource.ts
-    │   │   └── user.ts
-    │   └── module/                     # 业务封装层
-    │
-    ├── router/
-    │   └── index.ts
-    │
-    ├── typings/                        # 类型定义
-    │   ├── api.ts
-    │   ├── dataType.ts
-    │   ├── flowDefine.ts
-    │   ├── flowDesign.ts
-    │   ├── suite.ts
-    │   ├── object.ts
-    │   └── parameter.ts
-    │
-    ├── const/                          # 常量
-    │   ├── dataType.ts                 # 数据类型枚举
-    │   └── application.ts             # 应用常量
-    │
-    └── utils/                          # 工具函数
-        ├── CommonUtil.ts
-        └── dataType.ts
+    ├── router/index.ts
+    ├── stores/                         # Pinia 状态管理
+    └── utils/
 ```
+
+
 
 ---
 
@@ -1170,39 +1266,53 @@ VALUES ('sync_example', '示例流程', 'sync', '...JSON...', '', 0);
 
 ## 十一、版本迭代计划
 
-### v1.0（基础版本）
-- [ ] 数据库 SQLite + EF Core 初始化
-- [ ] 用户登录（JWT）
-- [ ] 套件 CRUD
-- [ ] API 接口 CRUD
-- [ ] 自定义对象 CRUD
-- [ ] 流程定义 CRUD
-- [ ] 变量管理
+### v1.0（基础版本）✅ 已完成
+- [x] 数据库 SQLite + EF Core 初始化
+- [x] 用户登录（JWT）
+- [x] 套件 CRUD
+- [x] API 接口 CRUD
+- [x] 自定义对象 CRUD
+- [x] 流程定义 CRUD
+- [x] 变量管理
 
-### v1.1（流程引擎）
-- [ ] 流程引擎核心（方法节点 + 条件节点）
-- [ ] 流程调试接口
-- [ ] 流程部署接口
-- [ ] 流程版本管理（启用/禁用）
-- [ ] 流程触发（同步）
+### v1.1（流程引擎）✅ 已完成
+- [x] 流程引擎核心（START/END/METHOD/CONDITION 节点）
+- [x] 流程调试接口
+- [x] 流程部署接口
+- [x] 流程版本管理（启用/禁用）
+- [x] 流程触发（同步）
 
-### v1.2（完善功能）
-- [ ] 开放接口（/open）
-- [ ] Token 管理
-- [ ] 数据源管理
-- [ ] API 调试
-- [ ] Swagger 接口文档
+### v1.2（完善功能）✅ 已完成
+- [x] 开放接口（/open）+ Token 认证
+- [x] 数据源管理（SQLite/MySQL/PostgreSQL/SQL Server）+ 测试连接
+- [x] API 调试
+- [x] Swagger 接口文档
+- [x] ASSIGN（赋值）/ CODE（代码）/ MYSQL（数据库）/ MERGE（聚合）节点
 
-### v1.3（前端）
-- [ ] 登录页
-- [ ] 流程定义列表 + 编辑
-- [ ] 流程设计器（拖拽式）
-- [ ] 流程调试页
-- [ ] 套件/API 管理
-- [ ] 对象管理
-- [ ] 系统设置
+### v1.3（前端）✅ 已完成
+- [x] 登录页
+- [x] 流程定义列表 + 编辑
+- [x] 流程设计器（@vue-flow/core 拖拽式，自动布局，MiniMap）
+- [x] 流程调试（节点高亮、错误提示、nodeLogs 时间轴）
+- [x] 套件/API 管理（含接口入参/出参/Header 可视化）
+- [x] 对象管理
+- [x] 系统设置（Token、数据源）
 
-### v1.4（优化）
-- [ ] 前后端打包部署
-- [ ] 单元测试
-- [ ] 错误日志
+### v1.4（监控与变量）✅ 已完成
+- [x] 全局静态变量（t_static_variable，支持跨流程共享读写）
+- [x] 执行日志（t_flow_log + t_flow_node_log，含变量快照时间轴）
+- [x] 调试接口改进（统一 HTTP 200，失败节点携带 errorMessage）
+- [x] DDD 四层架构重构（Domain/Application/Infrastructure/Api）
+
+### v1.5（子流程与协作）✅ 已完成（2026-04-01）
+- [x] SUB_FLOW 子流程节点（递归调用已发布流程，支持入参/出参映射）
+- [x] 流程定义导入/导出（JSON 格式，自动生成新 flowKey）
+- [x] 套件管理导入/导出（含接口+参数全量导出/导入）
+- [x] 开放接口支持不带版本号（自动取最新已发布版本）
+
+### v1.6（待规划）
+- [ ] 流程模板市场
+- [ ] 流程版本对比
+- [ ] 执行日志统计图表
+- [ ] 接口批量测试
+
