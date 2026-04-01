@@ -26,6 +26,23 @@ public class FlowOpenController : ControllerBase
         return await _db.Tokens.AnyAsync(t => t.TokenValue == token && t.Status == 1 && t.Deleted == 0);
     }
 
+    /// <summary>校验 Token 对指定流程是否有权限（无权限配置则允许全部）</summary>
+    private async Task<bool> ValidateFlowPermission(string? token, string flowKey)
+    {
+        if (string.IsNullOrEmpty(token)) return false;
+        var tokenEntity = await _db.Tokens.FirstOrDefaultAsync(t => t.TokenValue == token && t.Status == 1 && t.Deleted == 0);
+        if (tokenEntity == null) return false;
+
+        // 查询是否有权限配置
+        var hasPermissions = await _db.TokenPermissions.AnyAsync(p => p.TokenId == tokenEntity.Id && p.Deleted == 0);
+        if (!hasPermissions) return true; // 无权限配置 = 全部允许
+
+        // 有权限配置，检查是否包含该流程
+        return await _db.TokenPermissions.AnyAsync(p =>
+            p.TokenId == tokenEntity.Id && p.PermissionType == "FLOW" &&
+            p.ResourceKey == flowKey && p.Deleted == 0);
+    }
+
     // ──────────────────────────────────────────────
     // 带版本号
     // ──────────────────────────────────────────────
@@ -37,6 +54,8 @@ public class FlowOpenController : ControllerBase
     {
         if (!await ValidateToken(token))
             return ApiResult.Fail("无效的 Access Token", 401);
+        if (!await ValidateFlowPermission(token, key))
+            return ApiResult.Fail("该 Token 无权访问此流程");
 
         return await TriggerFlowByVersion(version, key,
             queryParams.ToDictionary(k => k.Key, k => (object?)k.Value));
@@ -49,6 +68,8 @@ public class FlowOpenController : ControllerBase
     {
         if (!await ValidateToken(token))
             return ApiResult.Fail("无效的 Access Token", 401);
+        if (!await ValidateFlowPermission(token, key))
+            return ApiResult.Fail("该 Token 无权访问此流程");
 
         return await TriggerFlowByVersion(version, key, bodyParams);
     }
@@ -64,6 +85,8 @@ public class FlowOpenController : ControllerBase
     {
         if (!await ValidateToken(token))
             return ApiResult.Fail("无效的 Access Token", 401);
+        if (!await ValidateFlowPermission(token, key))
+            return ApiResult.Fail("该 Token 无权访问此流程");
 
         return await TriggerFlowLatest(key,
             queryParams.ToDictionary(k => k.Key, k => (object?)k.Value));
@@ -76,6 +99,8 @@ public class FlowOpenController : ControllerBase
     {
         if (!await ValidateToken(token))
             return ApiResult.Fail("无效的 Access Token", 401);
+        if (!await ValidateFlowPermission(token, key))
+            return ApiResult.Fail("该 Token 无权访问此流程");
 
         return await TriggerFlowLatest(key, bodyParams);
     }

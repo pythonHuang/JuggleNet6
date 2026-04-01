@@ -42,7 +42,7 @@ public class TokenController : ControllerBase
         entity.Deleted   = 1;
         entity.UpdatedAt = DateTime.Now.ToString("o");
         await _db.SaveChangesAsync();
-        return ApiResult.Success();
+        return ApiResult.Fail("Token不存在");
     }
 
     [HttpPost("page")]
@@ -59,5 +59,48 @@ public class TokenController : ControllerBase
         {
             Total = total, PageNum = req.PageNum, PageSize = req.PageSize, Records = records
         });
+    }
+
+    // ===== 权限管理 =====
+
+    /// <summary>获取 Token 的权限列表</summary>
+    [HttpGet("permissions/{tokenId}")]
+    public async Task<ApiResult> GetPermissions(long tokenId)
+    {
+        var list = await _db.TokenPermissions
+            .Where(p => p.TokenId == tokenId && p.Deleted == 0)
+            .ToListAsync();
+        return ApiResult.Success(list);
+    }
+
+    /// <summary>保存 Token 的权限列表（全量覆盖）</summary>
+    [HttpPost("permissions/{tokenId}")]
+    public async Task<ApiResult> SavePermissions(long tokenId, [FromBody] List<TokenPermissionSaveRequest> permissions)
+    {
+        var token = await _db.Tokens.FindAsync(tokenId);
+        if (token == null || token.Deleted == 1) return ApiResult.Fail("Token不存在");
+
+        // 删除旧权限
+        var oldPerms = await _db.TokenPermissions
+            .Where(p => p.TokenId == tokenId && p.Deleted == 0)
+            .ToListAsync();
+        foreach (var p in oldPerms) p.Deleted = 1;
+        _db.TokenPermissions.UpdateRange(oldPerms);
+
+        // 添加新权限
+        foreach (var perm in permissions)
+        {
+            _db.TokenPermissions.Add(new TokenPermissionEntity
+            {
+                TokenId        = tokenId,
+                PermissionType = perm.PermissionType,
+                ResourceKey    = perm.ResourceKey,
+                ResourceName   = perm.ResourceName,
+                CreatedAt      = DateTime.Now.ToString("o")
+            });
+        }
+
+        await _db.SaveChangesAsync();
+        return ApiResult.Success();
     }
 }

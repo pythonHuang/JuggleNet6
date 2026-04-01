@@ -17,6 +17,7 @@ public class JuggleDbContext : DbContext
     public DbSet<FlowInfoEntity> FlowInfos { get; set; } = null!;
     public DbSet<FlowVersionEntity> FlowVersions { get; set; } = null!;
     public DbSet<TokenEntity> Tokens { get; set; } = null!;
+    public DbSet<TokenPermissionEntity> TokenPermissions { get; set; } = null!;
     public DbSet<DataSourceEntity> DataSources { get; set; } = null!;
     public DbSet<FlowLogEntity> FlowLogs { get; set; } = null!;
     public DbSet<FlowNodeLogEntity> FlowNodeLogs { get; set; } = null!;

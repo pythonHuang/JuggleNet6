@@ -145,6 +145,14 @@ public class TokenAddRequest
     public string? ExpiredAt { get; set; }
 }
 
+// Token 权限
+public class TokenPermissionSaveRequest
+{
+    public string PermissionType { get; set; } = "";  // FLOW / API
+    public string ResourceKey { get; set; } = "";     // flowKey / methodCode
+    public string? ResourceName { get; set; }
+}
+
 // DataSource
 public class DataSourceAddRequest
 {
