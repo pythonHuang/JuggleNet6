@@ -12,4 +12,6 @@ public class ApiEntity : BaseEntity
     /// <summary>JSON FORM</summary>
     public string? ContentType { get; set; }
     public string? MockJson { get; set; }
+    /// <summary>HTTP WEBSERVICE</summary>
+    public string? MethodType { get; set; } = "HTTP";
 }

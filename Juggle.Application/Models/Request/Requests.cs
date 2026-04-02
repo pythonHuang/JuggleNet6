@@ -41,6 +41,8 @@ public class ApiAddRequest
     public string RequestType { get; set; } = "GET";
     public string ContentType { get; set; } = "JSON";
     public string? MockJson { get; set; }
+    /// <summary>HTTP WEBSERVICE</summary>
+    public string MethodType { get; set; } = "HTTP";
 }
 
 public class ApiUpdateRequest : ApiAddRequest

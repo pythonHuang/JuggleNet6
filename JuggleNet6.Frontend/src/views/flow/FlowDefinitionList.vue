@@ -91,7 +91,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '../../utils/request'
-import { Document, Packer, Paragraph, Table, TableRow, TableCell, TextRun, WidthType, HeadingLevel, AlignmentType, BorderStyle } from 'docx'
+import { Document, Packer, Paragraph, Table, TableRow, TableCell, WidthType, HeadingLevel, AlignmentType, BorderStyle } from 'docx'
 import { saveAs } from 'file-saver'
 
 const router = useRouter()
@@ -261,37 +261,37 @@ async function generateWord() {
       // 入参表格
       if (flow.inputParams.length > 0) {
         children.push(new Paragraph({ text: '入参说明：', heading: HeadingLevel.HEADING_3, spacing: { before: 200, after: 100 } }))
-        const headerRow = new TableRow({
+        const inHeaderRow = new TableRow({
           children: ['参数名', '参数编码', '数据类型', '必填', '默认值', '说明'].map(t =>
             new TableCell({ children: [new Paragraph({ text: t, run: { bold: true } })], width: { size: t === '说明' ? 3000 : 1600, type: WidthType.DXA }, borders: noBorder })
           )
         })
-        const paramRows = flow.inputParams.map((p: any) =>
+        const inParamRows = flow.inputParams.map((p: any) =>
           new TableRow({
             children: [p.paramName || '', p.paramCode || '', p.dataType || '', p.required === 1 ? '是' : '否', p.defaultValue || '', p.remark || ''].map(t =>
               new TableCell({ children: [new Paragraph({ text: String(t) })], width: { size: 1600, type: WidthType.DXA }, borders: noBorder })
             )
           })
         )
-        children.push(new Table({ rows: [headerRow, ...paramRows], width: { size: 100, type: WidthType.PERCENTAGE }))
+        children.push(new Table({ rows: [inHeaderRow, ...inParamRows], width: { size: 100, type: WidthType.PERCENTAGE } }))
       }
 
       // 出参表格
       if (flow.outputParams.length > 0) {
         children.push(new Paragraph({ text: '出参说明：', heading: HeadingLevel.HEADING_3, spacing: { before: 200, after: 100 } }))
-        const headerRow = new TableRow({
+        const outHeaderRow = new TableRow({
           children: ['参数名', '参数编码', '数据类型', '说明'].map(t =>
             new TableCell({ children: [new Paragraph({ text: t, run: { bold: true } })], width: { size: t === '说明' ? 4000 : 2000, type: WidthType.DXA }, borders: noBorder })
           )
         })
-        const paramRows = flow.outputParams.map((p: any) =>
+        const outParamRows = flow.outputParams.map((p: any) =>
           new TableRow({
             children: [p.paramName || '', p.paramCode || '', p.dataType || '', p.remark || ''].map(t =>
               new TableCell({ children: [new Paragraph({ text: String(t) })], width: { size: 2000, type: WidthType.DXA }, borders: noBorder })
             )
           })
         )
-        children.push(new Table({ rows: [headerRow, ...paramRows], width: { size: 100, type: WidthType.PERCENTAGE }))
+        children.push(new Table({ rows: [outHeaderRow, ...outParamRows], width: { size: 100, type: WidthType.PERCENTAGE } }))
       }
 
       // 变量表格
@@ -309,7 +309,7 @@ async function generateWord() {
             )
           })
         )
-        children.push(new Table({ rows: [headerRow, ...varRows], width: { size: 100, type: WidthType.PERCENTAGE }))
+        children.push(new Table({ rows: [headerRow, ...varRows], width: { size: 100, type: WidthType.PERCENTAGE } }))
       }
     }
 

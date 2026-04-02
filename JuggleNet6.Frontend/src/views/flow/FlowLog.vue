@@ -10,6 +10,7 @@
           <el-select v-model="searchForm.status" placeholder="全部" clearable style="width:120px">
             <el-option label="成功" value="SUCCESS" />
             <el-option label="失败" value="FAILED" />
+            <el-option label="执行中" value="RUNNING" />
           </el-select>
         </el-form-item>
         <el-form-item label="日期范围">
@@ -39,17 +40,17 @@
         <el-table-column prop="flowName" label="流程名称" min-width="130" show-overflow-tooltip />
         <el-table-column prop="flowKey" label="流程Key" min-width="150" show-overflow-tooltip />
         <el-table-column prop="version" label="版本" width="80" />
-        <el-table-column prop="triggerType" label="触发方式" width="90">
+        <el-table-column prop="triggerType" label="触发方式" width="100">
           <template #default="{ row }">
-            <el-tag size="small" :type="row.triggerType === 'open' ? 'warning' : 'info'">
-              {{ row.triggerType }}
+            <el-tag size="small" :type="row.triggerType === 'open' ? 'warning' : row.triggerType === 'open_async' ? 'danger' : 'info'">
+              {{ row.triggerType === 'open_async' ? '异步触发' : row.triggerType }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="status" label="状态" width="80">
+        <el-table-column prop="status" label="状态" width="85">
           <template #default="{ row }">
-            <el-tag size="small" :type="row.status === 'SUCCESS' ? 'success' : 'danger'">
-              {{ row.status === 'SUCCESS' ? '成功' : '失败' }}
+            <el-tag size="small" :type="row.status === 'SUCCESS' ? 'success' : row.status === 'RUNNING' ? 'primary' : 'danger'">
+              {{ row.status === 'SUCCESS' ? '成功' : row.status === 'RUNNING' ? '执行中' : '失败' }}
             </el-tag>
           </template>
         </el-table-column>

@@ -1,6 +1,7 @@
 using Juggle.Infrastructure.Persistence;
 using Juggle.Application.Models.Response;
 using Juggle.Application.Services.Flow;
+using Juggle.Domain.Entities;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -103,6 +104,90 @@ public class FlowOpenController : ControllerBase
             return ApiResult.Fail("该 Token 无权访问此流程");
 
         return await TriggerFlowLatest(key, bodyParams);
+    }
+
+    // ──────────────────────────────────────────────
+    // 异步触发（立即返回 logId，后台执行）
+    // ──────────────────────────────────────────────
+
+    /// <summary>
+    /// 异步触发流程（POST），立即返回 logId，不等待执行完成。
+    /// 调用方通过 GET /open/flow/result/{logId} 轮询执行结果。
+    /// </summary>
+    [HttpPost("triggerAsync/{key}")]
+    public async Task<ApiResult> TriggerAsyncPost(string key,
+        [FromBody] Dictionary<string, object?> bodyParams,
+        [FromHeader(Name = "X-Access-Token")] string? token)
+    {
+        if (!await ValidateToken(token))
+            return ApiResult.Fail("无效的 Access Token", 401);
+        if (!await ValidateFlowPermission(token, key))
+            return ApiResult.Fail("该 Token 无权访问此流程");
+
+        var flowVersion = await _db.FlowVersions
+            .Where(v => v.FlowKey == key && v.Status == 1 && v.Deleted == 0)
+            .OrderByDescending(v => v.Id)
+            .FirstOrDefaultAsync();
+        if (flowVersion == null)
+            return ApiResult.Fail("未找到已发布的流程版本");
+
+        var definition = await _db.FlowDefinitions
+            .FirstOrDefaultAsync(f => f.FlowKey == key && f.Deleted == 0);
+        if (definition == null)
+            return ApiResult.Fail("流程定义不存在");
+
+        // 预先写入一条 RUNNING 日志，获得 logId
+        var logId = await _flowExec.CreateRunningLogAsync(definition, flowVersion.Version!, bodyParams);
+
+        // 后台异步执行，不阻塞当前请求
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await _flowExec.RunAsyncWithLog(definition, flowVersion.FlowContent!, bodyParams,
+                    "open_async", flowVersion.Version!, logId);
+            }
+            catch { /* 异常已在 RunAsyncWithLog 内记录到日志 */ }
+        });
+
+        return ApiResult.Success(new { logId, message = "流程已提交异步执行，请通过 logId 轮询结果" });
+    }
+
+    /// <summary>
+    /// 查询异步流程执行结果。
+    /// status: RUNNING（执行中）/ SUCCESS（成功）/ FAILED（失败）
+    /// </summary>
+    [HttpGet("result/{logId}")]
+    public async Task<ApiResult> GetAsyncResult(long logId,
+        [FromHeader(Name = "X-Access-Token")] string? token)
+    {
+        if (!await ValidateToken(token))
+            return ApiResult.Fail("无效的 Access Token", 401);
+
+        var log = await _db.FlowLogs.FirstOrDefaultAsync(l => l.Id == logId && l.Deleted == 0);
+        if (log == null)
+            return ApiResult.Fail("日志记录不存在");
+
+        object? outputData = null;
+        if (!string.IsNullOrEmpty(log.OutputJson) && log.Status != "RUNNING")
+        {
+            try { outputData = System.Text.Json.JsonSerializer.Deserialize<object>(log.OutputJson); }
+            catch { outputData = log.OutputJson; }
+        }
+
+        return ApiResult.Success(new
+        {
+            logId    = log.Id,
+            status   = log.Status,
+            flowKey  = log.FlowKey,
+            flowName = log.FlowName,
+            version  = log.Version,
+            startTime = log.StartTime,
+            endTime  = log.EndTime,
+            costMs   = log.CostMs,
+            errorMessage = log.ErrorMessage,
+            output   = outputData
+        });
     }
 
     // ──────────────────────────────────────────────

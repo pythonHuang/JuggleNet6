@@ -42,7 +42,7 @@ public class TokenController : ControllerBase
         entity.Deleted   = 1;
         entity.UpdatedAt = DateTime.Now.ToString("o");
         await _db.SaveChangesAsync();
-        return ApiResult.Fail("Token不存在");
+        return ApiResult.Success("删除成功");
     }
 
     [HttpPost("page")]

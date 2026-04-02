@@ -57,6 +57,10 @@ public class MethodConfig
     [JsonPropertyName("contentType")]
     public string ContentType { get; set; } = "JSON";
 
+    /// <summary>HTTP WEBSERVICE</summary>
+    [JsonPropertyName("methodType")]
+    public string MethodType { get; set; } = "HTTP";
+
     [JsonPropertyName("inputFillRules")]
     public List<FillRule> InputFillRules { get; set; } = new();
 

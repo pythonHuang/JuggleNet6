@@ -204,4 +204,110 @@ public class FlowExecutionService
 
         return result;
     }
+
+    // ────────────────────────────────────────────────────────────────
+    // 异步执行（预写 RUNNING 日志 + 后台执行后更新）
+    // ────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// 异步执行前预写一条 RUNNING 状态的主日志，返回 logId。
+    /// 调用方可立即将 logId 返回给外部，外部通过 logId 轮询结果。
+    /// </summary>
+    public async Task<long> CreateRunningLogAsync(
+        FlowDefinitionEntity        definition,
+        string                      version,
+        Dictionary<string, object?> inputParams)
+    {
+        var log = new FlowLogEntity
+        {
+            FlowKey     = definition.FlowKey,
+            FlowName    = definition.FlowName,
+            Version     = version,
+            TriggerType = "open_async",
+            Status      = "RUNNING",
+            StartTime   = DateTime.Now.ToString("o"),
+            InputJson   = JsonSerializer.Serialize(inputParams),
+            CreatedAt   = DateTime.Now.ToString("o")
+        };
+        _db.FlowLogs.Add(log);
+        await _db.SaveChangesAsync();
+        return log.Id;
+    }
+
+    /// <summary>
+    /// 后台执行流程，执行完毕后将结果更新到已有的 RUNNING 日志记录（通过 logId 定位）。
+    /// </summary>
+    public async Task RunAsyncWithLog(
+        FlowDefinitionEntity        definition,
+        string                      flowContent,
+        Dictionary<string, object?> inputParams,
+        string                      triggerType,
+        string                      version,
+        long                        logId)
+    {
+        var dsInfos    = await BuildDataSourceInfosAsync();
+        var staticVars = await BuildStaticVariableSnapshotAsync();
+
+        async Task<string?> FlowContentLoader(string flowKey)
+        {
+            var ver = await _db.FlowVersions
+                .Where(v => v.FlowKey == flowKey && v.Status == 1 && v.Deleted == 0)
+                .OrderByDescending(v => v.Id)
+                .FirstOrDefaultAsync();
+            return ver?.FlowContent;
+        }
+
+        var engine    = new FlowEngine(_httpClientFactory, dsInfos, staticVars, FlowContentLoader);
+        var startTime = DateTime.Now;
+        FlowResult result;
+        try
+        {
+            result = await engine.ExecuteAsync(flowContent, inputParams, definition.FlowKey!, triggerType);
+        }
+        catch (Exception ex)
+        {
+            result = new FlowResult { Success = false, ErrorMessage = ex.Message };
+        }
+
+        // 更新已有的 RUNNING 日志为最终状态
+        var log = await _db.FlowLogs.FindAsync(logId);
+        if (log != null)
+        {
+            log.Status       = result.Success ? "SUCCESS" : "FAILED";
+            log.EndTime      = DateTime.Now.ToString("o");
+            log.CostMs       = result.CostMs > 0 ? result.CostMs : (long)(DateTime.Now - startTime).TotalMilliseconds;
+            log.ErrorMessage = result.ErrorMessage;
+            log.OutputJson   = JsonSerializer.Serialize(result.OutputData);
+            log.UpdatedAt    = DateTime.Now.ToString("o");
+
+            // 保存节点明细
+            if (result.Context?.NodeLogs.Count > 0)
+            {
+                var nodeLogs = result.Context.NodeLogs.Select(nl => new FlowNodeLogEntity
+                {
+                    FlowLogId      = log.Id,
+                    NodeKey        = nl.NodeKey,
+                    NodeLabel      = nl.NodeLabel,
+                    NodeType       = nl.NodeType,
+                    SeqNo          = nl.SeqNo,
+                    Status         = nl.Status,
+                    StartTime      = nl.StartTime.ToString("o"),
+                    EndTime        = nl.EndTime?.ToString("o"),
+                    CostMs         = nl.CostMs,
+                    InputSnapshot  = nl.InputSnapshot,
+                    OutputSnapshot = nl.OutputSnapshot,
+                    Detail         = nl.Detail,
+                    ErrorMessage   = nl.ErrorMessage,
+                    CreatedAt      = nl.StartTime.ToString("o")
+                }).ToList();
+                _db.FlowNodeLogs.AddRange(nodeLogs);
+            }
+
+            await _db.SaveChangesAsync();
+        }
+
+        // 回写被修改的静态变量
+        if (result.Context != null)
+            await FlushStaticVariablesAsync(result.Context);
+    }
 }

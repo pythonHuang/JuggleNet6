@@ -13,10 +13,16 @@
       <el-descriptions title="基本信息" :column="2" border size="small" style="margin-bottom:24px">
         <el-descriptions-item label="接口名称">{{ apiInfo?.methodName }}</el-descriptions-item>
         <el-descriptions-item label="接口Code">{{ apiInfo?.methodCode }}</el-descriptions-item>
-        <el-descriptions-item label="请求方式">
-          <el-tag :type="methodColor(apiInfo?.requestType)" size="small">{{ apiInfo?.requestType }}</el-tag>
+        <el-descriptions-item label="接口类型">
+          <el-tag :type="apiInfo?.methodType === 'WEBSERVICE' ? 'warning' : 'info'" size="small">
+            {{ apiInfo?.methodType === 'WEBSERVICE' ? 'WebService（SOAP）' : 'API 接口（HTTP）' }}
+          </el-tag>
         </el-descriptions-item>
-        <el-descriptions-item label="内容类型">{{ apiInfo?.contentType }}</el-descriptions-item>
+        <el-descriptions-item label="请求方式">
+          <el-tag v-if="apiInfo?.methodType !== 'WEBSERVICE'" :type="methodColor(apiInfo?.requestType)" size="small">{{ apiInfo?.requestType }}</el-tag>
+          <el-tag v-else type="warning" size="small">SOAP 1.1</el-tag>
+        </el-descriptions-item>
+        <el-descriptions-item label="内容类型">{{ apiInfo?.methodType === 'WEBSERVICE' ? 'text/xml' : apiInfo?.contentType }}</el-descriptions-item>
         <el-descriptions-item label="URL" :span="2">{{ apiInfo?.url }}</el-descriptions-item>
         <el-descriptions-item label="描述" :span="2">{{ apiInfo?.methodDesc || '-' }}</el-descriptions-item>
       </el-descriptions>

@@ -229,7 +229,7 @@
               <el-button size="small" type="danger" link icon="Delete"
                 @click="selectedNode.subFlowConfig.outputMappings.splice(idx, 1)" />
             </div>
-            <div class="prop-tip">子流程需先部署发布才能被调用。入参映射将当前变量填入子流程，出参映射将子流程输出写回当前变量。</div>
+            <div class="prop-tip">选择要调用的子流程（所有已定义流程均可选择，调用时需确保子流程已发布）。入参映射将当前变量填入子流程，出参映射将子流程输出写回当前变量。</div>
           </template>
 
           <!-- METHOD 节点属性 -->
@@ -1391,8 +1391,9 @@ async function loadStaticVariables() {
 
 async function loadPublishedFlows() {
   try {
-    // 从 FlowInfo 表（已部署的流程）获取，排除自身 flowKey
-    const res: any = await request.post('/flow/info/page', { pageNum: 1, pageSize: 200 })
+    // 从 FlowDefinition 表加载所有流程（无需部署），排除自身 flowKey
+    // 原来从 FlowInfo 加载会导致未部署的流程无法选择（子流程下拉为空）
+    const res: any = await request.post('/flow/definition/page', { pageNum: 1, pageSize: 200 })
     publishedFlows.value = (res.data?.records || []).filter((f: any) => f.flowKey !== flowKey)
   } catch {}
 }

@@ -71,7 +71,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '../../utils/request'
-import { Document, Packer, Paragraph, Table, TableRow, TableCell, TextRun, WidthType, HeadingLevel, AlignmentType, BorderStyle } from 'docx'
+import { Document, Packer, Paragraph, Table, TableRow, TableCell, WidthType, HeadingLevel, AlignmentType, BorderStyle } from 'docx'
 import { saveAs } from 'file-saver'
 
 const router = useRouter()
@@ -230,7 +230,7 @@ async function generateWord() {
           children.push(new Paragraph({ text: 'Header 参数：', spacing: { after: 50 }, run: { bold: true } }))
           const hRow = new TableRow({ children: ['参数名', '参数编码', '类型', '默认值'].map(t => new TableCell({ children: [new Paragraph({ text: t, run: { bold: true } })], width: { size: 25, type: WidthType.PERCENTAGE }, borders: noBorder })) })
           const hRows = headerParams.map((p: any) => new TableRow({ children: [p.paramName || '', p.paramCode || '', p.dataType || '', p.defaultValue || ''].map(t => new TableCell({ children: [new Paragraph({ text: String(t) })], width: { size: 25, type: WidthType.PERCENTAGE }, borders: noBorder })) }))
-          children.push(new Table({ rows: [hRow, ...hRows], width: { size: 100, type: WidthType.PERCENTAGE }))
+          children.push(new Table({ rows: [hRow, ...hRows], width: { size: 100, type: WidthType.PERCENTAGE } }))
         }
 
         // 入参
@@ -238,7 +238,7 @@ async function generateWord() {
           children.push(new Paragraph({ text: '入参说明：', spacing: { before: 100, after: 50 }, run: { bold: true } }))
           const iRow = new TableRow({ children: ['参数名', '参数编码', '数据类型', '必填', '默认值'].map(t => new TableCell({ children: [new Paragraph({ text: t, run: { bold: true } })], width: { size: 20, type: WidthType.PERCENTAGE }, borders: noBorder })) })
           const iRows = inputParams.map((p: any) => new TableRow({ children: [p.paramName || '', p.paramCode || '', p.dataType || '', p.required === 1 ? '是' : '否', p.defaultValue || ''].map(t => new TableCell({ children: [new Paragraph({ text: String(t) })], width: { size: 20, type: WidthType.PERCENTAGE }, borders: noBorder })) }))
-          children.push(new Table({ rows: [iRow, ...iRows], width: { size: 100, type: WidthType.PERCENTAGE }))
+          children.push(new Table({ rows: [iRow, ...iRows], width: { size: 100, type: WidthType.PERCENTAGE } }))
         }
 
         // 出参
@@ -246,7 +246,7 @@ async function generateWord() {
           children.push(new Paragraph({ text: '出参说明：', spacing: { before: 100, after: 50 }, run: { bold: true } }))
           const oRow = new TableRow({ children: ['参数名', '参数编码', '数据类型', '说明'].map(t => new TableCell({ children: [new Paragraph({ text: t, run: { bold: true } })], width: { size: 25, type: WidthType.PERCENTAGE }, borders: noBorder })) })
           const oRows = outputParams.map((p: any) => new TableRow({ children: [p.paramName || '', p.paramCode || '', p.dataType || '', p.remark || ''].map(t => new TableCell({ children: [new Paragraph({ text: String(t) })], width: { size: 25, type: WidthType.PERCENTAGE }, borders: noBorder })) }))
-          children.push(new Table({ rows: [oRow, ...oRows], width: { size: 100, type: WidthType.PERCENTAGE }))
+          children.push(new Table({ rows: [oRow, ...oRows], width: { size: 100, type: WidthType.PERCENTAGE } }))
         }
       }
     }

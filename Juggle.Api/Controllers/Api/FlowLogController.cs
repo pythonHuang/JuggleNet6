@@ -74,6 +74,35 @@ public class FlowLogController : ControllerBase
         return ApiResult.Success();
     }
 
+    /// <summary>查询异步流程执行结果（管理端，JWT认证）</summary>
+    [HttpGet("asyncResult/{logId}")]
+    public async Task<ApiResult> AsyncResult(long logId)
+    {
+        var log = await _db.FlowLogs.FirstOrDefaultAsync(l => l.Id == logId && l.Deleted == 0);
+        if (log == null) return ApiResult.Fail("日志记录不存在");
+
+        object? outputData = null;
+        if (!string.IsNullOrEmpty(log.OutputJson) && log.Status != "RUNNING")
+        {
+            try { outputData = System.Text.Json.JsonSerializer.Deserialize<object>(log.OutputJson); }
+            catch { outputData = log.OutputJson; }
+        }
+
+        return ApiResult.Success(new
+        {
+            logId    = log.Id,
+            status   = log.Status,
+            flowKey  = log.FlowKey,
+            flowName = log.FlowName,
+            version  = log.Version,
+            startTime = log.StartTime,
+            endTime  = log.EndTime,
+            costMs   = log.CostMs,
+            errorMessage = log.ErrorMessage,
+            output   = outputData
+        });
+    }
+
     /// <summary>清空某流程的所有日志</summary>
     [HttpDelete("clear/{flowKey}")]
     public async Task<ApiResult> Clear(string flowKey)

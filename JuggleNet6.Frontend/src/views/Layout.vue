@@ -15,6 +15,7 @@
           <el-menu-item index="/flow/define">流程定义</el-menu-item>
           <el-menu-item index="/flow/list">流程列表</el-menu-item>
           <el-menu-item index="/flow/log">执行日志</el-menu-item>
+          <el-menu-item index="/flow/async-result">异步结果查询</el-menu-item>
         </el-sub-menu>
         <el-sub-menu index="suite">
           <template #title>

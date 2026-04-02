@@ -42,6 +42,7 @@ public class JuggleDbContext : DbContext
         modelBuilder.Entity<FlowLogEntity>().ToTable("t_flow_log");
         modelBuilder.Entity<FlowNodeLogEntity>().ToTable("t_flow_node_log");
         modelBuilder.Entity<StaticVariableEntity>().ToTable("t_static_variable");
+        modelBuilder.Entity<TokenPermissionEntity>().ToTable("t_token_permission");
 
         // 列名映射（snake_case）
         modelBuilder.Entity<UserEntity>(e => {
@@ -87,6 +88,7 @@ public class JuggleDbContext : DbContext
             e.Property(p => p.RequestType).HasColumnName("request_type");
             e.Property(p => p.ContentType).HasColumnName("content_type");
             e.Property(p => p.MockJson).HasColumnName("mock_json");
+            e.Property(p => p.MethodType).HasColumnName("method_type");
         });
 
         modelBuilder.Entity<ParameterEntity>(e => {
@@ -266,6 +268,19 @@ public class JuggleDbContext : DbContext
             e.Property(p => p.DefaultValue).HasColumnName("default_value");
             e.Property(p => p.Description).HasColumnName("description");
             e.Property(p => p.GroupName).HasColumnName("group_name");
+        });
+
+        modelBuilder.Entity<TokenPermissionEntity>(e => {
+            e.Property(p => p.Id).HasColumnName("id");
+            e.Property(p => p.Deleted).HasColumnName("deleted");
+            e.Property(p => p.CreatedAt).HasColumnName("created_at");
+            e.Property(p => p.CreatedBy).HasColumnName("created_by");
+            e.Property(p => p.UpdatedAt).HasColumnName("updated_at");
+            e.Property(p => p.UpdatedBy).HasColumnName("updated_by");
+            e.Property(p => p.TokenId).HasColumnName("token_id");
+            e.Property(p => p.PermissionType).HasColumnName("permission_type");
+            e.Property(p => p.ResourceKey).HasColumnName("resource_key");
+            e.Property(p => p.ResourceName).HasColumnName("resource_name");
         });
 
         // 初始数据
