@@ -17,6 +17,7 @@
         <el-button size="small" @click="addNode('MERGE')" class="tb-btn-merge">⇒ 聚合</el-button>
         <el-button size="small" @click="addNode('LOOP')" class="tb-btn-loop">↻ 循环</el-button>
         <el-button size="small" @click="addNode('DELAY')" class="tb-btn-delay">⏱ 延迟</el-button>
+        <el-button size="small" @click="addNode('PARALLEL')" class="tb-btn-parallel">∥ 并行</el-button>
         <el-button size="small" @click="addNode('END')" :disabled="hasEnd" class="tb-btn-end">⏹ 结束</el-button>
       </div>
       <div class="toolbar-right">
@@ -208,6 +209,22 @@
               <el-input v-model="selectedNode.delayConfig.delayVariable" size="small" placeholder="变量名，值为毫秒数" />
             </div>
             <div class="prop-tip" style="margin-top:8px">延迟节点会暂停流程执行指定毫秒。适用于限流、等待、定时触发等场景。</div>
+          </template>
+
+          <!-- PARALLEL 并行节点属性 -->
+          <template v-if="selectedNode.elementType === 'PARALLEL'">
+            <div class="prop-item">
+              <label>等待模式</label>
+              <el-radio-group v-model="selectedNode.parallelConfig.waitMode" size="small">
+                <el-radio value="ALL_WAIT">全部等待</el-radio>
+                <el-radio value="ANY_FAST">任一完成</el-radio>
+              </el-radio-group>
+            </div>
+            <div class="prop-item">
+              <label>并行超时(ms)</label>
+              <el-input-number v-model="selectedNode.parallelConfig.timeout" :min="0" :step="1000" size="small" style="width:100%" placeholder="0=不限" />
+            </div>
+            <div class="prop-tip" style="margin-top:8px">并行节点会同时执行所有分支路径。通过画布连线设置各分支入口。<br/>全部等待：所有分支完成后继续。任一完成：任一分支完成即继续。</div>
           </template>
 
           <!-- SUB_FLOW 子流程节点属性 -->
@@ -523,8 +540,8 @@
             </div>
           </template>
 
-          <!-- 通用配置：超时 + 重试（非 START/END/MERGE/CONDITION/LOOP/DELAY 节点） -->
-          <template v-if="!['START','END','MERGE','CONDITION','LOOP','DELAY'].includes(selectedNode.elementType)">
+          <!-- 通用配置：超时 + 重试（非 START/END/MERGE/CONDITION/LOOP/DELAY/PARALLEL 节点） -->
+          <template v-if="!['START','END','MERGE','CONDITION','LOOP','DELAY','PARALLEL'].includes(selectedNode.elementType)">
             <div class="prop-section-title" style="margin-top:12px">⏱ 超时 / 重试</div>
             <div class="prop-item">
               <label>超时时间(ms)</label>
@@ -912,7 +929,7 @@ function vfNodeColor(node: any) {
     start: '#52c41a', end: '#ff4d4f', method: '#1890ff',
     assign: '#722ed1', code: '#eb2f96', mysql: '#13c2c2',
     condition: '#fa8c16', merge: '#7c3aed', sub_flow: '#0891b2',
-    loop: '#8b5cf6', delay: '#64748b'
+    loop: '#8b5cf6', delay: '#64748b', parallel: '#e11d48'
   }
   return map[node.data?.elementType?.toLowerCase()] || '#aaa'
 }
@@ -1470,7 +1487,7 @@ function nodeIcon(type: string) {
   const map: Record<string, string> = {
     START: '▶', END: '⏹', METHOD: '⚙', CONDITION: '◆',
     ASSIGN: '←', CODE: '{ }', MYSQL: '⊕', MERGE: '⇒', SUB_FLOW: '⬡',
-    LOOP: '↻', DELAY: '⏱'
+    LOOP: '↻', DELAY: '⏱', PARALLEL: '∥'
   }
   return map[type] || '?'
 }
@@ -1479,7 +1496,7 @@ function nodeTypeName(type: string) {
   const map: Record<string, string> = {
     START: '开始', END: '结束', METHOD: '方法', CONDITION: '条件',
     ASSIGN: '赋值', CODE: '代码', MYSQL: '数据库', MERGE: '聚合', SUB_FLOW: '子流程',
-    LOOP: '循环', DELAY: '延迟'
+    LOOP: '循环', DELAY: '延迟', PARALLEL: '并行'
   }
   return map[type] || type
 }
@@ -1519,6 +1536,9 @@ function addNode(type: string) {
   }
   if (type === 'DELAY' || type === 'WAIT') bNode.delayConfig = {
     delayMs: 1000, variableMode: false, delayVariable: ''
+  }
+  if (type === 'PARALLEL') bNode.parallelConfig = {
+    waitMode: 'ALL_WAIT', timeout: 0, branches: []
   }
 
   businessNodes.value.push(bNode)
@@ -1788,6 +1808,7 @@ async function runDebug() {
 .tb-btn-subflow   { background: #0891b2 !important; border-color: #0891b2 !important; color: #fff !important; }
 .tb-btn-loop      { background: #8b5cf6 !important; border-color: #8b5cf6 !important; color: #fff !important; }
 .tb-btn-delay     { background: #64748b !important; border-color: #64748b !important; color: #fff !important; }
+.tb-btn-parallel  { background: #e11d48 !important; border-color: #e11d48 !important; color: #fff !important; }
 
 .designer-body { flex: 1; display: flex; overflow: hidden; }
 
@@ -1877,6 +1898,7 @@ async function runDebug() {
 .type-dot-sub_flow { color: #0891b2; }
 .type-dot-loop { color: #8b5cf6; }
 .type-dot-delay { color: #64748b; }
+.type-dot-parallel { color: #e11d48; }
 
 .fill-rule-row {
   display: flex; align-items: center; gap: 4px;
@@ -2028,6 +2050,7 @@ async function runDebug() {
 .jg-sub_flow  { background: linear-gradient(135deg, #e0f2fe, #7dd3fc); border-color: #0891b2; }
 .jg-loop      { background: linear-gradient(135deg, #f5f3ff, #c4b5fd); border-color: #8b5cf6; }
 .jg-delay     { background: linear-gradient(135deg, #f1f5f9, #cbd5e1); border-color: #64748b; }
+.jg-parallel  { background: linear-gradient(135deg, #fff1f2, #fecdd3); border-color: #e11d48; }
 
 /* Handle 连接点样式 */
 .jg-handle {

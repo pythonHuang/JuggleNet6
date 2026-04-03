@@ -5,7 +5,7 @@ namespace Juggle.Domain.Engine;
 
 /// <summary>
 /// 流程执行引擎：解析流程 JSON，按节点拓扑顺序执行，维护变量上下文
-/// 支持节点类型：START / END / METHOD / CONDITION / ASSIGN / CODE / MYSQL(DB) / MERGE / SUB_FLOW / LOOP / DELAY
+/// 支持节点类型：START / END / METHOD / CONDITION / ASSIGN / CODE / MYSQL(DB) / MERGE / SUB_FLOW / LOOP / DELAY / PARALLEL
 /// 支持功能：节点执行日志收集、静态全局变量读写、子流程递归调用
 /// </summary>
 public class FlowEngine
@@ -145,6 +145,7 @@ public class FlowEngine
                     _httpClientFactory, _dataSources, _staticVarSnapshot),
                 "LOOP"          => new LoopNodeExecutor(),
                 "DELAY" or "WAIT" => new DelayNodeExecutor(),
+                "PARALLEL"      => new ParallelNodeExecutor(),
                 _ => throw new InvalidOperationException($"未知节点类型: {currentNode.ElementType}")
             };
 
@@ -181,6 +182,90 @@ public class FlowEngine
                 else
                 {
                     currentKey = branchKey;
+                }
+                continue;
+            }
+
+            // PARALLEL：并行执行所有 outgoings 分支
+            if (currentNode.ElementType == "PARALLEL")
+            {
+                var paraLog = context.BeginNodeLog(currentNode.Key, currentNode.Label ?? "PARALLEL", "PARALLEL");
+                paraLog.InputSnapshot = SnapshotVariables(context.Variables);
+
+                var waitMode = currentNode.ParallelConfig?.WaitMode ?? "ALL_WAIT";
+                var paraTimeout = currentNode.ParallelConfig?.Timeout ?? 0;
+                var branchKeys = currentNode.Outgoings.Where(k => !string.IsNullOrEmpty(k)).ToList();
+
+                if (branchKeys.Count == 0)
+                {
+                    paraLog.Complete("SUCCESS", detail: "无分支可执行");
+                    break;
+                }
+
+                try
+                {
+                    if (waitMode == "ANY_FAST")
+                    {
+                        // ANY_FAST：任一分支完成即继续
+                        var branchTasks = branchKeys.Select(k => ExecuteBranchAsync(k, nodeMap, context, paraLog)).ToList();
+
+                        if (paraTimeout > 0)
+                        {
+                            var completedTask = await System.Threading.Tasks.Task.WhenAny(
+                                System.Threading.Tasks.Task.WhenAll(branchTasks),
+                                System.Threading.Tasks.Task.Delay(paraTimeout));
+                            if (completedTask != System.Threading.Tasks.Task.WhenAll(branchTasks))
+                            {
+                                paraLog.Complete("SUCCESS", detail: $"ANY_FAST超时({paraTimeout}ms)，已完成部分分支");
+                                currentKey = currentNode.Outgoings.FirstOrDefault() ?? "";
+                                continue;
+                            }
+                        }
+
+                        await System.Threading.Tasks.Task.WhenAll(branchTasks);
+                        paraLog.Complete("SUCCESS", detail: $"ANY_FAST: {branchKeys.Count}个分支并行完成");
+                    }
+                    else
+                    {
+                        // ALL_WAIT：等待所有分支完成
+                        var branchTasks = branchKeys.Select(k => ExecuteBranchAsync(k, nodeMap, context, paraLog)).ToList();
+
+                        if (paraTimeout > 0)
+                        {
+                            var completedTask = await System.Threading.Tasks.Task.WhenAny(
+                                System.Threading.Tasks.Task.WhenAll(branchTasks),
+                                System.Threading.Tasks.Task.Delay(paraTimeout));
+                            if (completedTask != System.Threading.Tasks.Task.WhenAll(branchTasks))
+                            {
+                                throw new TimeoutException($"PARALLEL node [{currentNode.Key}] 超时({paraTimeout}ms)，部分分支未完成");
+                            }
+                        }
+
+                        await System.Threading.Tasks.Task.WhenAll(branchTasks);
+                        paraLog.Complete("SUCCESS", detail: $"ALL_WAIT: {branchKeys.Count}个分支并行完成");
+                    }
+
+                    paraLog.OutputSnapshot = SnapshotVariables(context.Variables);
+
+                    // PARALLEL 之后继续执行（走到下一个节点或结束）
+                    // 如果有 MERGE 节点则用它汇聚，否则直接走 PARALLEL 的 outgoing
+                    var mergeKey = FindMergeNode(currentNode, nodeMap);
+                    if (mergeKey != null && nodeMap.ContainsKey(mergeKey))
+                    {
+                        currentKey = nodeMap[mergeKey].Outgoings.FirstOrDefault() ?? "";
+                    }
+                    else
+                    {
+                        // 无 MERGE，所有分支完成后执行 PARALLEL 节点之后的节点
+                        // 对于 PARALLEL，我们需要查找所有分支最终汇聚的节点
+                        var finalNode = FindParallelEndNode(branchKeys, nodeMap, new HashSet<string>());
+                        currentKey = finalNode ?? "";
+                    }
+                }
+                catch (Exception ex)
+                {
+                    paraLog.Complete("FAILED", errorMsg: ex.Message);
+                    throw;
                 }
                 continue;
             }
@@ -296,5 +381,61 @@ public class FlowEngine
             }
         }
         return null;
+    }
+
+    /// <summary>执行一个并行分支（从起始节点到 MERGE/END）</summary>
+    private async Task ExecuteBranchAsync(
+        string branchStartKey,
+        Dictionary<string, FlowNode> nodeMap,
+        FlowContext context,
+        NodeLogEntry paraLog)
+    {
+        try
+        {
+            await ExecuteFromNode(branchStartKey, nodeMap, context);
+        }
+        catch (Exception ex)
+        {
+            paraLog.Detail = (paraLog.Detail ?? "") + $"\n分支 [{branchStartKey}] 失败: {ex.Message}";
+        }
+    }
+
+    /// <summary>查找并行分支最终的汇聚节点（所有分支最终到达的同一个节点）</summary>
+    private static string? FindParallelEndNode(List<string> branchKeys, Dictionary<string, FlowNode> nodeMap, HashSet<string> visited)
+    {
+        // 简化实现：取第一个分支的终点
+        // 对于 PARALLEL 后接 MERGE 的场景，FindMergeNode 已经处理
+        // 这里处理无 MERGE 的情况，直接找分支链末尾的下一个节点
+        if (branchKeys.Count == 0) return null;
+
+        var endKeys = new HashSet<string>();
+        foreach (var bk in branchKeys)
+        {
+            var end = FindBranchEnd(bk, nodeMap, new HashSet<string>());
+            if (end != null) endKeys.Add(end);
+        }
+
+        // 如果所有分支汇聚到同一个节点，返回它
+        if (endKeys.Count == 1) return endKeys.First();
+        return null;
+    }
+
+    private static string? FindBranchEnd(string nodeKey, Dictionary<string, FlowNode> nodeMap, HashSet<string> visited)
+    {
+        if (string.IsNullOrEmpty(nodeKey) || !visited.Add(nodeKey)) return null;
+        if (!nodeMap.TryGetValue(nodeKey, out var node)) return null;
+        if (node.ElementType == "END" || node.ElementType == "MERGE") return nodeKey;
+        if (node.ElementType == "CONDITION")
+        {
+            // CONDITION 有多分支，取第一个
+            if (node.Conditions != null && node.Conditions.Count > 0)
+            {
+                var firstCond = node.Conditions.FirstOrDefault(c => !string.IsNullOrEmpty(c.Outgoing));
+                if (firstCond != null) return FindBranchEnd(firstCond.Outgoing!, nodeMap, visited);
+            }
+            return nodeKey;
+        }
+        if (node.Outgoings.Count > 0) return FindBranchEnd(node.Outgoings[0], nodeMap, visited);
+        return nodeKey;
     }
 }

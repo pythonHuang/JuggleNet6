@@ -61,6 +61,10 @@ public class FlowNode
     /// <summary>延迟节点配置（DELAY/WAIT 节点）</summary>
     [JsonPropertyName("delayConfig")]
     public DelayConfig? DelayConfig { get; set; }
+
+    /// <summary>并行节点配置（PARALLEL 节点）</summary>
+    [JsonPropertyName("parallelConfig")]
+    public ParallelConfig? ParallelConfig { get; set; }
 }
 
 /// <summary>方法节点配置</summary>
@@ -277,4 +281,32 @@ public class DelayConfig
     /// <summary>延迟时间变量名（variableMode=true 时生效）</summary>
     [JsonPropertyName("delayVariable")]
     public string? DelayVariable { get; set; }
+}
+
+/// <summary>并行节点配置（PARALLEL 节点）</summary>
+public class ParallelConfig
+{
+    /// <summary>等待模式：ALL_WAIT（等所有分支完成）/ ANY_FAST（任一完成即继续）</summary>
+    [JsonPropertyName("waitMode")]
+    public string WaitMode { get; set; } = "ALL_WAIT";
+
+    /// <summary>并行超时时间（毫秒），0=不限</summary>
+    [JsonPropertyName("timeout")]
+    public int Timeout { get; set; } = 0;
+
+    /// <summary>分支定义（可选，也可用 outgoings + 画布连线）</summary>
+    [JsonPropertyName("branches")]
+    public List<ParallelBranch>? Branches { get; set; }
+}
+
+/// <summary>并行分支定义</summary>
+public class ParallelBranch
+{
+    /// <summary>分支名称</summary>
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = "";
+
+    /// <summary>分支起始节点 Key（对应 outgoings 中的 key）</summary>
+    [JsonPropertyName("nodeKey")]
+    public string NodeKey { get; set; } = "";
 }
