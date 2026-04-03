@@ -38,6 +38,7 @@
           <el-menu-item index="/system/datasource">数据源管理</el-menu-item>
           <el-menu-item index="/system/static-var">静态变量</el-menu-item>
           <el-menu-item index="/system/schedule">定时任务</el-menu-item>
+          <el-menu-item index="/system/webhook">Webhook 管理</el-menu-item>
         </el-sub-menu>
       </el-menu>
     </el-aside>

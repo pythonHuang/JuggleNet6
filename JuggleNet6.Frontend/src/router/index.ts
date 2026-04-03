@@ -23,6 +23,7 @@ const routes = [
       { path: 'system/datasource', component: () => import('../views/system/DataSourceList.vue') },
       { path: 'system/static-var', component: () => import('../views/system/StaticVariable.vue') },
       { path: 'system/schedule',  component: () => import('../views/system/ScheduleTask.vue') },
+      { path: 'system/webhook',   component: () => import('../views/system/WebhookList.vue') },
       { path: 'flow/log',          component: () => import('../views/flow/FlowLog.vue') },
       { path: 'flow/async-result', component: () => import('../views/flow/AsyncFlowResult.vue') }
     ]

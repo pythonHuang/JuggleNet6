@@ -23,6 +23,7 @@ public class JuggleDbContext : DbContext
     public DbSet<FlowNodeLogEntity> FlowNodeLogs { get; set; } = null!;
     public DbSet<StaticVariableEntity> StaticVariables { get; set; } = null!;
     public DbSet<ScheduleTaskEntity> ScheduleTasks { get; set; } = null!;
+    public DbSet<WebhookEntity> Webhooks { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -45,6 +46,7 @@ public class JuggleDbContext : DbContext
         modelBuilder.Entity<StaticVariableEntity>().ToTable("t_static_variable");
         modelBuilder.Entity<TokenPermissionEntity>().ToTable("t_token_permission");
         modelBuilder.Entity<ScheduleTaskEntity>().ToTable("t_schedule_task");
+        modelBuilder.Entity<WebhookEntity>().ToTable("t_webhook");
 
         // 列名映射（snake_case）
         modelBuilder.Entity<UserEntity>(e => {
@@ -302,6 +304,26 @@ public class JuggleDbContext : DbContext
             e.Property(p => p.LastRunStatus).HasColumnName("last_run_status");
             e.Property(p => p.NextRunTime).HasColumnName("next_run_time");
             e.Property(p => p.RunCount).HasColumnName("run_count");
+        });
+
+        modelBuilder.Entity<WebhookEntity>(e => {
+            e.Property(p => p.Id).HasColumnName("id");
+            e.Property(p => p.Deleted).HasColumnName("deleted");
+            e.Property(p => p.CreatedAt).HasColumnName("created_at");
+            e.Property(p => p.CreatedBy).HasColumnName("created_by");
+            e.Property(p => p.UpdatedAt).HasColumnName("updated_at");
+            e.Property(p => p.UpdatedBy).HasColumnName("updated_by");
+            e.Property(p => p.WebhookKey).HasColumnName("webhook_key");
+            e.Property(p => p.WebhookName).HasColumnName("webhook_name");
+            e.Property(p => p.FlowKey).HasColumnName("flow_key");
+            e.Property(p => p.FlowName).HasColumnName("flow_name");
+            e.Property(p => p.Secret).HasColumnName("secret");
+            e.Property(p => p.AllowedMethod).HasColumnName("allowed_method");
+            e.Property(p => p.AsyncMode).HasColumnName("async_mode");
+            e.Property(p => p.Status).HasColumnName("status");
+            e.Property(p => p.TriggerCount).HasColumnName("trigger_count");
+            e.Property(p => p.LastTriggerTime).HasColumnName("last_trigger_time");
+            e.Property(p => p.Remark).HasColumnName("remark");
         });
 
         // 初始数据
