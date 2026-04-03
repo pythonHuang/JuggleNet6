@@ -37,13 +37,22 @@ public class MethodNodeExecutor : INodeExecutor
             inputParams[rule.Target] = val;
         }
 
-        // 2. 发起 HTTP 或 WebService 请求
+        // 2. 发起 HTTP 或 WebService 请求（Mock 模式直接返回预设数据）
         string responseJson;
         try
         {
             var methodType = method.MethodType?.ToUpper() ?? "HTTP";
 
-            if (methodType == "WEBSERVICE")
+            // Mock 模式（优先级最高）：节点级 > 接口级 > 真实调用
+            if (!string.IsNullOrEmpty(node.MockJson))
+            {
+                responseJson = node.MockJson;
+            }
+            else if (!string.IsNullOrEmpty(method.MockJson))
+            {
+                responseJson = method.MockJson;
+            }
+            else if (methodType == "WEBSERVICE")
             {
                 responseJson = await CallWebServiceAsync(method, inputParams, headerParams);
             }

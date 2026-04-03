@@ -49,6 +49,10 @@ public class FlowNode
     /// <summary>重试间隔（毫秒），默认1000ms</summary>
     [JsonPropertyName("retryInterval")]
     public int RetryInterval { get; set; } = 1000;
+
+    /// <summary>Mock 模式：设置后不发起真实请求，直接返回此 JSON 作为响应</summary>
+    [JsonPropertyName("mockJson")]
+    public string? MockJson { get; set; }
 }
 
 /// <summary>方法节点配置</summary>
@@ -81,6 +85,10 @@ public class MethodConfig
 
     [JsonPropertyName("headerFillRules")]
     public List<FillRule> HeaderFillRules { get; set; } = new();
+
+    /// <summary>Mock 模式返回的预设 JSON 数据，非空则跳过真实调用</summary>
+    [JsonPropertyName("mockJson")]
+    public string? MockJson { get; set; }
 }
 
 /// <summary>条件节点分支配置</summary>

@@ -25,6 +25,11 @@
         <el-descriptions-item label="内容类型">{{ apiInfo?.methodType === 'WEBSERVICE' ? 'text/xml' : apiInfo?.contentType }}</el-descriptions-item>
         <el-descriptions-item label="URL" :span="2">{{ apiInfo?.url }}</el-descriptions-item>
         <el-descriptions-item label="描述" :span="2">{{ apiInfo?.methodDesc || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="Mock状态">
+          <el-tag :type="apiInfo?.mockJson ? 'success' : 'info'" size="small">
+            {{ apiInfo?.mockJson ? '✅ 已启用 Mock' : '未配置 Mock' }}
+          </el-tag>
+        </el-descriptions-item>
       </el-descriptions>
 
       <!-- 入参管理 -->
@@ -177,6 +182,33 @@
           <el-button size="small" @click="saveParams('header')">保存 Header</el-button>
         </div>
       </div>
+
+      <!-- Mock 数据配置 -->
+      <div class="param-section" style="margin-top:24px">
+        <div class="section-header">
+          <span class="section-title">
+            <el-icon color="#722ed1"><MagicStick /></el-icon> Mock 数据配置（可选）
+          </span>
+          <el-switch v-model="mockEnabled" active-text="启用" inactive-text="关闭" @change="onMockToggle" />
+        </div>
+        <el-alert
+          v-if="mockEnabled"
+          title="启用 Mock 后，调试和流程调用将跳过真实请求，直接返回以下预设 JSON 数据"
+          type="warning" :closable="false" style="margin-bottom:10px"
+        />
+        <el-input
+          v-if="mockEnabled"
+          v-model="mockJson"
+          type="textarea"
+          :rows="8"
+          placeholder='请输入预设的 JSON 响应数据，例如：&#10;{&#10;  "code": 200,&#10;  "message": "success",&#10;  "data": { "name": "mock数据" }&#10;}'
+          style="font-family: monospace"
+        />
+        <div v-if="mockEnabled" style="margin-top:8px;text-align:right">
+          <el-button type="warning" size="small" @click="saveMockData">保存 Mock 数据</el-button>
+          <el-button size="small" @click="formatMockJson">格式化 JSON</el-button>
+        </div>
+      </div>
     </el-card>
   </div>
 </template>
@@ -197,6 +229,8 @@ const apiInfo = ref<any>(null)
 const inputParams = ref<any[]>([])
 const outputParams = ref<any[]>([])
 const headerParams = ref<any[]>([])
+const mockEnabled = ref(false)
+const mockJson = ref('')
 
 // paramType: 1=入参, 2=出参, 3=header
 const PARAM_TYPE = { input: 1, output: 2, header: 3 }
@@ -215,6 +249,16 @@ onMounted(async () => {
       loadParams('output'),
       loadParams('header')
     ])
+
+    // 加载 Mock 数据
+    if (apiInfo.value?.mockJson) {
+      mockEnabled.value = true
+      try {
+        mockJson.value = JSON.stringify(JSON.parse(apiInfo.value.mockJson), null, 2)
+      } catch {
+        mockJson.value = apiInfo.value.mockJson
+      }
+    }
   } finally {
     loading.value = false
   }
@@ -261,6 +305,49 @@ async function saveParams(type: 'input' | 'output' | 'header') {
 function methodColor(type: string) {
   const map: Record<string, string> = { GET: 'success', POST: 'primary', PUT: 'warning', DELETE: 'danger' }
   return map[type] || 'info'
+}
+
+function onMockToggle(enabled: boolean) {
+  if (!enabled) {
+    mockJson.value = ''
+  }
+}
+
+async function saveMockData() {
+  if (!apiInfo.value) return
+  const json = mockEnabled.value ? mockJson.value : ''
+  if (mockEnabled.value && json.trim()) {
+    try {
+      JSON.parse(json)
+    } catch {
+      ElMessage.error('Mock 数据必须是合法的 JSON 格式')
+      return
+    }
+  }
+  await request.put('/suite/api/update', {
+    id: apiId,
+    suiteCode: apiInfo.value.suiteCode,
+    methodCode: apiInfo.value.methodCode,
+    methodName: apiInfo.value.methodName,
+    methodDesc: apiInfo.value.methodDesc,
+    url: apiInfo.value.url,
+    requestType: apiInfo.value.requestType,
+    contentType: apiInfo.value.contentType,
+    methodType: apiInfo.value.methodType,
+    mockJson: json
+  })
+  apiInfo.value.mockJson = json
+  ElMessage.success(mockEnabled.value ? 'Mock 数据已保存' : 'Mock 已关闭')
+}
+
+function formatMockJson() {
+  try {
+    const parsed = JSON.parse(mockJson.value)
+    mockJson.value = JSON.stringify(parsed, null, 2)
+    ElMessage.success('格式化成功')
+  } catch {
+    ElMessage.error('JSON 格式错误，无法格式化')
+  }
 }
 </script>
 

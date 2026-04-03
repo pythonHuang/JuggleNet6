@@ -106,13 +106,19 @@ public class ApiController : ControllerBase
 
         try
         {
+            // Mock 模式：如果接口配置了 MockJson，直接返回预设数据
+            if (!string.IsNullOrEmpty(api.MockJson))
+            {
+                return ApiResult.Success(new { response = api.MockJson, mock = true });
+            }
+
             // WebService（SOAP 1.1）调试
             if (methodType == "WEBSERVICE")
             {
                 return await DebugWebService(api, req);
             }
 
-            // HTTP 调试（原有逻辑）
+            // HTTP 调用（原有逻辑）
             var client = _httpClientFactory.CreateClient();
             foreach (var h in req.Headers)
                 client.DefaultRequestHeaders.TryAddWithoutValidation(h.Key, h.Value?.ToString());
