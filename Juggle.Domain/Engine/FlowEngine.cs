@@ -187,12 +187,11 @@ public class FlowEngine
             var nodeLog = context.BeginNodeLog(currentNode.Key, currentNode.Label ?? currentNode.ElementType, currentNode.ElementType);
             nodeLog.InputSnapshot = SnapshotVariables(context.Variables);
 
-            string? nextKey;
+            string? nextKey = null;
             var retryCount = currentNode.RetryCount > 0 ? currentNode.RetryCount : 0;
             var retryInterval = currentNode.RetryInterval > 0 ? currentNode.RetryInterval : 1000;
             var timeout = currentNode.Timeout > 0 ? currentNode.Timeout : 0;
             var attempts = 0;
-            Exception? lastEx = null;
 
             while (attempts <= retryCount)
             {
@@ -216,12 +215,10 @@ public class FlowEngine
                     }
                     nodeLog.Complete("SUCCESS");
                     nodeLog.OutputSnapshot = SnapshotVariables(context.Variables);
-                    lastEx = null;
                     break;
                 }
                 catch (Exception ex)
                 {
-                    lastEx = ex;
                     attempts++;
                     if (attempts <= retryCount)
                     {

@@ -73,6 +73,9 @@ builder.Services.AddHttpClient();
 // 流程引擎（Scoped，因依赖 HttpClientFactory）
 builder.Services.AddScoped<FlowEngine>();
 
+// 定时任务调度器（后台服务）
+builder.Services.AddHostedService<Juggle.Api.Services.ScheduleTaskService>();
+
 // ── 业务 Service 层 ──────────────────────────────────────────────
 builder.Services.AddScoped<FlowExecutionService>();  // 流程执行核心（数据源、静态变量、日志）
 builder.Services.AddScoped<DataSourceService>();     // 数据源连接字符串构建 + 连接测试
@@ -185,6 +188,26 @@ CREATE TABLE IF NOT EXISTS t_static_variable (
     // 补建流程定义分组字段
     try { db.Database.ExecuteSqlRaw("ALTER TABLE t_flow_definition ADD COLUMN group_name TEXT DEFAULT NULL;"); }
     catch { /* 列已存在则忽略 */ }
+
+    // 补建定时任务表
+    db.Database.ExecuteSqlRaw(@"
+CREATE TABLE IF NOT EXISTS t_schedule_task (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    deleted         INTEGER NOT NULL DEFAULT 0,
+    created_at      TEXT,
+    created_by      TEXT,
+    updated_at      TEXT,
+    updated_by      TEXT,
+    flow_key        TEXT,
+    flow_name       TEXT,
+    cron_expression TEXT,
+    input_json      TEXT,
+    status          INTEGER NOT NULL DEFAULT 0,
+    last_run_time   TEXT,
+    last_run_status TEXT,
+    next_run_time   TEXT,
+    run_count       INTEGER NOT NULL DEFAULT 0
+);");
 }
 
 if (app.Environment.IsDevelopment())

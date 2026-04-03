@@ -21,6 +21,7 @@ const routes = [
       { path: 'system/token',      component: () => import('../views/system/TokenList.vue') },
       { path: 'system/datasource', component: () => import('../views/system/DataSourceList.vue') },
       { path: 'system/static-var', component: () => import('../views/system/StaticVariable.vue') },
+      { path: 'system/schedule',  component: () => import('../views/system/ScheduleTask.vue') },
       { path: 'flow/log',          component: () => import('../views/flow/FlowLog.vue') },
       { path: 'flow/async-result', component: () => import('../views/flow/AsyncFlowResult.vue') }
     ]

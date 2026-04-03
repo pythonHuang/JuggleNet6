@@ -22,6 +22,7 @@ public class JuggleDbContext : DbContext
     public DbSet<FlowLogEntity> FlowLogs { get; set; } = null!;
     public DbSet<FlowNodeLogEntity> FlowNodeLogs { get; set; } = null!;
     public DbSet<StaticVariableEntity> StaticVariables { get; set; } = null!;
+    public DbSet<ScheduleTaskEntity> ScheduleTasks { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -43,6 +44,7 @@ public class JuggleDbContext : DbContext
         modelBuilder.Entity<FlowNodeLogEntity>().ToTable("t_flow_node_log");
         modelBuilder.Entity<StaticVariableEntity>().ToTable("t_static_variable");
         modelBuilder.Entity<TokenPermissionEntity>().ToTable("t_token_permission");
+        modelBuilder.Entity<ScheduleTaskEntity>().ToTable("t_schedule_task");
 
         // 列名映射（snake_case）
         modelBuilder.Entity<UserEntity>(e => {
@@ -282,6 +284,24 @@ public class JuggleDbContext : DbContext
             e.Property(p => p.PermissionType).HasColumnName("permission_type");
             e.Property(p => p.ResourceKey).HasColumnName("resource_key");
             e.Property(p => p.ResourceName).HasColumnName("resource_name");
+        });
+
+        modelBuilder.Entity<ScheduleTaskEntity>(e => {
+            e.Property(p => p.Id).HasColumnName("id");
+            e.Property(p => p.Deleted).HasColumnName("deleted");
+            e.Property(p => p.CreatedAt).HasColumnName("created_at");
+            e.Property(p => p.CreatedBy).HasColumnName("created_by");
+            e.Property(p => p.UpdatedAt).HasColumnName("updated_at");
+            e.Property(p => p.UpdatedBy).HasColumnName("updated_by");
+            e.Property(p => p.FlowKey).HasColumnName("flow_key");
+            e.Property(p => p.FlowName).HasColumnName("flow_name");
+            e.Property(p => p.CronExpression).HasColumnName("cron_expression");
+            e.Property(p => p.InputJson).HasColumnName("input_json");
+            e.Property(p => p.Status).HasColumnName("status");
+            e.Property(p => p.LastRunTime).HasColumnName("last_run_time");
+            e.Property(p => p.LastRunStatus).HasColumnName("last_run_status");
+            e.Property(p => p.NextRunTime).HasColumnName("next_run_time");
+            e.Property(p => p.RunCount).HasColumnName("run_count");
         });
 
         // 初始数据

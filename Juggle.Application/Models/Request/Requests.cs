@@ -201,3 +201,24 @@ public class SetValueRequest
 {
     public string? Value { get; set; }
 }
+
+// ScheduleTask
+public class ScheduleTaskAddRequest
+{
+    public string FlowKey { get; set; } = "";
+    public string? FlowName { get; set; }
+    public string CronExpression { get; set; } = "0 */5 * * * *";
+    public string? InputJson { get; set; }
+}
+
+public class ScheduleTaskUpdateRequest : ScheduleTaskAddRequest
+{
+    public long Id { get; set; }
+    public int Status { get; set; }
+}
+
+public class ScheduleTaskPageRequest : PageRequest
+{
+    public string? FlowKey { get; set; }
+    public int? Status { get; set; }
+}
