@@ -122,4 +122,60 @@ public class FlowLogController : ControllerBase
         await _db.SaveChangesAsync();
         return ApiResult.Success();
     }
+
+    /// <summary>仪表盘统计：今日执行次数/成功率/平均耗时 + 近7天趋势</summary>
+    [HttpGet("dashboard")]
+    public async Task<ApiResult> Dashboard()
+    {
+        var today = DateTime.Today.ToString("o");
+        var sevenDaysAgo = DateTime.Now.AddDays(-7).ToString("o");
+
+        // 今日统计
+        var todayLogs = await _db.FlowLogs
+            .Where(l => l.Deleted == 0 && l.StartTime != null && l.StartTime.CompareTo(today) >= 0)
+            .ToListAsync();
+        var todayTotal = todayLogs.Count;
+        var todaySuccess = todayLogs.Count(l => l.Status == "SUCCESS");
+        var todayFailed = todayLogs.Count(l => l.Status == "FAILED");
+        var avgCostMs = todayTotal > 0 ? (long)todayLogs.Where(l => l.CostMs > 0).Average(l => l.CostMs) : 0;
+
+        // 总体统计
+        var totalLogs = await _db.FlowLogs.Where(l => l.Deleted == 0).CountAsync();
+
+        // 最近10次失败流程
+        var recentFailed = await _db.FlowLogs
+            .Where(l => l.Deleted == 0 && l.Status == "FAILED")
+            .OrderByDescending(l => l.Id)
+            .Take(10)
+            .Select(l => new { l.Id, l.FlowKey, l.FlowName, l.ErrorMessage, l.StartTime })
+            .ToListAsync();
+
+        // 近7天执行趋势（按天分组）
+        var weekLogs = await _db.FlowLogs
+            .Where(l => l.Deleted == 0 && l.StartTime != null && l.StartTime.CompareTo(sevenDaysAgo) >= 0)
+            .ToListAsync();
+        var weekTrend = weekLogs
+            .GroupBy(l => l.StartTime?.Substring(0, 10) ?? "")
+            .Select(g => new { date = g.Key, total = g.Count(), success = g.Count(l => l.Status == "SUCCESS"), failed = g.Count(l => l.Status == "FAILED") })
+            .OrderBy(x => x.date)
+            .ToList();
+
+        // Top 5 流程执行次数
+        var topFlows = await _db.FlowLogs
+            .Where(l => l.Deleted == 0)
+            .GroupBy(l => new { l.FlowKey, l.FlowName })
+            .Select(g => new { flowKey = g.Key.FlowKey, flowName = g.Key.FlowName, count = g.Count() })
+            .OrderByDescending(x => x.count)
+            .Take(5)
+            .ToListAsync();
+
+        return ApiResult.Success(new
+        {
+            today = new { total = todayTotal, success = todaySuccess, failed = todayFailed, avgCostMs, successRate = todayTotal > 0 ? Math.Round((double)todaySuccess / todayTotal * 100, 1) : 0 },
+            totalLogs,
+            recentFailed,
+            weekTrend,
+            topFlows
+        });
+    }
 }

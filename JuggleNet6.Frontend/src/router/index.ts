@@ -11,6 +11,7 @@ const routes = [
     redirect: '/flow/define',
     children: [
       { path: 'flow/define', component: () => import('../views/flow/FlowDefinitionList.vue') },
+      { path: 'flow/dashboard', component: () => import('../views/flow/Dashboard.vue') },
       { path: 'flow/list',   component: () => import('../views/flow/FlowInfoList.vue') },
       { path: 'flow/version/:flowKey', component: () => import('../views/flow/FlowVersionList.vue') },
       { path: 'suite/list',  component: () => import('../views/suite/SuiteList.vue') },
