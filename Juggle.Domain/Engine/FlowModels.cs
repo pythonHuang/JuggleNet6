@@ -65,6 +65,10 @@ public class FlowNode
     /// <summary>并行节点配置（PARALLEL 节点）</summary>
     [JsonPropertyName("parallelConfig")]
     public ParallelConfig? ParallelConfig { get; set; }
+
+    /// <summary>通知节点配置（NOTIFY 节点）</summary>
+    [JsonPropertyName("notifyConfig")]
+    public NotifyConfig? NotifyConfig { get; set; }
 }
 
 /// <summary>方法节点配置</summary>
@@ -309,4 +313,40 @@ public class ParallelBranch
     /// <summary>分支起始节点 Key（对应 outgoings 中的 key）</summary>
     [JsonPropertyName("nodeKey")]
     public string NodeKey { get; set; } = "";
+}
+
+/// <summary>通知节点配置（NOTIFY 节点）</summary>
+public class NotifyConfig
+{
+    /// <summary>通知类型：WEBHOOK（HTTP回调）/ EMAIL（邮件）</summary>
+    [JsonPropertyName("notifyType")]
+    public string NotifyType { get; set; } = "WEBHOOK";
+
+    /// <summary>Webhook URL（WEBHOOK 类型必填）</summary>
+    [JsonPropertyName("webhookUrl")]
+    public string WebhookUrl { get; set; } = "";
+
+    /// <summary>Webhook 请求方法：POST / GET</summary>
+    [JsonPropertyName("webhookMethod")]
+    public string WebhookMethod { get; set; } = "POST";
+
+    /// <summary>请求头（JSON格式，如 {"Authorization":"Bearer xxx"}）</summary>
+    [JsonPropertyName("webhookHeaders")]
+    public string? WebhookHeaders { get; set; }
+
+    /// <summary>通知内容模板，支持 ${varName} 变量替换</summary>
+    [JsonPropertyName("bodyTemplate")]
+    public string BodyTemplate { get; set; } = "{\"flowKey\":\"${flowKey}\",\"status\":\"success\"}";
+
+    /// <summary>邮件收件人（EMAIL 类型，多个用逗号分隔）</summary>
+    [JsonPropertyName("emailTo")]
+    public string? EmailTo { get; set; }
+
+    /// <summary>邮件主题（EMAIL 类型）</summary>
+    [JsonPropertyName("emailSubject")]
+    public string? EmailSubject { get; set; }
+
+    /// <summary>失败时是否中断流程，false=仅记录日志继续执行</summary>
+    [JsonPropertyName("failOnError")]
+    public bool FailOnError { get; set; } = false;
 }

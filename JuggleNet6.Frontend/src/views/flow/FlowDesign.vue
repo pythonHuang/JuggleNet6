@@ -18,6 +18,7 @@
         <el-button size="small" @click="addNode('LOOP')" class="tb-btn-loop">↻ 循环</el-button>
         <el-button size="small" @click="addNode('DELAY')" class="tb-btn-delay">⏱ 延迟</el-button>
         <el-button size="small" @click="addNode('PARALLEL')" class="tb-btn-parallel">∥ 并行</el-button>
+        <el-button size="small" @click="addNode('NOTIFY')" class="tb-btn-notify">✉ 通知</el-button>
         <el-button size="small" @click="addNode('END')" :disabled="hasEnd" class="tb-btn-end">⏹ 结束</el-button>
       </div>
       <div class="toolbar-right">
@@ -225,6 +226,53 @@
               <el-input-number v-model="selectedNode.parallelConfig.timeout" :min="0" :step="1000" size="small" style="width:100%" placeholder="0=不限" />
             </div>
             <div class="prop-tip" style="margin-top:8px">并行节点会同时执行所有分支路径。通过画布连线设置各分支入口。<br/>全部等待：所有分支完成后继续。任一完成：任一分支完成即继续。</div>
+          </template>
+
+          <!-- NOTIFY 通知节点属性 -->
+          <template v-if="selectedNode.elementType === 'NOTIFY'">
+            <div class="prop-item">
+              <label>通知类型</label>
+              <el-select v-model="selectedNode.notifyConfig.notifyType" size="small" style="width:100%">
+                <el-option value="WEBHOOK" label="Webhook 回调" />
+                <el-option value="EMAIL" label="邮件通知" />
+              </el-select>
+            </div>
+            <template v-if="selectedNode.notifyConfig.notifyType === 'WEBHOOK'">
+              <div class="prop-item">
+                <label>请求地址</label>
+                <el-input v-model="selectedNode.notifyConfig.webhookUrl" size="small" placeholder="https://..." />
+              </div>
+              <div class="prop-item">
+                <label>请求方法</label>
+                <el-select v-model="selectedNode.notifyConfig.webhookMethod" size="small" style="width:100%">
+                  <el-option value="POST" label="POST" />
+                  <el-option value="GET" label="GET" />
+                </el-select>
+              </div>
+              <div class="prop-item">
+                <label>自定义请求头</label>
+                <el-input v-model="selectedNode.notifyConfig.webhookHeaders" size="small" type="textarea" :rows="2" placeholder='{"Authorization":"Bearer xxx"}' />
+              </div>
+            </template>
+            <template v-if="selectedNode.notifyConfig.notifyType === 'EMAIL'">
+              <div class="prop-item">
+                <label>收件人</label>
+                <el-input v-model="selectedNode.notifyConfig.emailTo" size="small" placeholder="多个用逗号分隔" />
+              </div>
+              <div class="prop-item">
+                <label>邮件主题</label>
+                <el-input v-model="selectedNode.notifyConfig.emailSubject" size="small" placeholder="邮件主题" />
+              </div>
+            </template>
+            <div class="prop-item">
+              <label>内容模板</label>
+              <el-input v-model="selectedNode.notifyConfig.bodyTemplate" size="small" type="textarea" :rows="3" placeholder="支持 ${varName} 变量替换" />
+            </div>
+            <div class="prop-item">
+              <label>失败时中断流程</label>
+              <el-switch v-model="selectedNode.notifyConfig.failOnError" size="small" />
+            </div>
+            <div class="prop-tip" style="margin-top:8px">通知节点在流程中发送 Webhook 回调或邮件。内容模板支持 ${varName} 变量替换。</div>
           </template>
 
           <!-- SUB_FLOW 子流程节点属性 -->
@@ -541,7 +589,7 @@
           </template>
 
           <!-- 通用配置：超时 + 重试（非 START/END/MERGE/CONDITION/LOOP/DELAY/PARALLEL 节点） -->
-          <template v-if="!['START','END','MERGE','CONDITION','LOOP','DELAY','PARALLEL'].includes(selectedNode.elementType)">
+          <template v-if="!['START','END','MERGE','CONDITION','LOOP','DELAY','PARALLEL','NOTIFY'].includes(selectedNode.elementType)">
             <div class="prop-section-title" style="margin-top:12px">⏱ 超时 / 重试</div>
             <div class="prop-item">
               <label>超时时间(ms)</label>
@@ -929,7 +977,7 @@ function vfNodeColor(node: any) {
     start: '#52c41a', end: '#ff4d4f', method: '#1890ff',
     assign: '#722ed1', code: '#eb2f96', mysql: '#13c2c2',
     condition: '#fa8c16', merge: '#7c3aed', sub_flow: '#0891b2',
-    loop: '#8b5cf6', delay: '#64748b', parallel: '#e11d48'
+    loop: '#8b5cf6', delay: '#64748b', parallel: '#e11d48', notify: '#059669'
   }
   return map[node.data?.elementType?.toLowerCase()] || '#aaa'
 }
@@ -1487,7 +1535,7 @@ function nodeIcon(type: string) {
   const map: Record<string, string> = {
     START: '▶', END: '⏹', METHOD: '⚙', CONDITION: '◆',
     ASSIGN: '←', CODE: '{ }', MYSQL: '⊕', MERGE: '⇒', SUB_FLOW: '⬡',
-    LOOP: '↻', DELAY: '⏱', PARALLEL: '∥'
+    LOOP: '↻', DELAY: '⏱', PARALLEL: '∥', NOTIFY: '✉'
   }
   return map[type] || '?'
 }
@@ -1496,7 +1544,7 @@ function nodeTypeName(type: string) {
   const map: Record<string, string> = {
     START: '开始', END: '结束', METHOD: '方法', CONDITION: '条件',
     ASSIGN: '赋值', CODE: '代码', MYSQL: '数据库', MERGE: '聚合', SUB_FLOW: '子流程',
-    LOOP: '循环', DELAY: '延迟', PARALLEL: '并行'
+    LOOP: '循环', DELAY: '延迟', PARALLEL: '并行', NOTIFY: '通知'
   }
   return map[type] || type
 }
@@ -1539,6 +1587,11 @@ function addNode(type: string) {
   }
   if (type === 'PARALLEL') bNode.parallelConfig = {
     waitMode: 'ALL_WAIT', timeout: 0, branches: []
+  }
+  if (type === 'NOTIFY') bNode.notifyConfig = {
+    notifyType: 'WEBHOOK', webhookUrl: '', webhookMethod: 'POST',
+    webhookHeaders: '', bodyTemplate: '{"flowKey":"${flowKey}","status":"${status}"}',
+    emailTo: '', emailSubject: '', failOnError: false
   }
 
   businessNodes.value.push(bNode)
@@ -1809,6 +1862,7 @@ async function runDebug() {
 .tb-btn-loop      { background: #8b5cf6 !important; border-color: #8b5cf6 !important; color: #fff !important; }
 .tb-btn-delay     { background: #64748b !important; border-color: #64748b !important; color: #fff !important; }
 .tb-btn-parallel  { background: #e11d48 !important; border-color: #e11d48 !important; color: #fff !important; }
+.tb-btn-notify    { background: #059669 !important; border-color: #059669 !important; color: #fff !important; }
 
 .designer-body { flex: 1; display: flex; overflow: hidden; }
 
@@ -1899,6 +1953,7 @@ async function runDebug() {
 .type-dot-loop { color: #8b5cf6; }
 .type-dot-delay { color: #64748b; }
 .type-dot-parallel { color: #e11d48; }
+.type-dot-notify { color: #059669; }
 
 .fill-rule-row {
   display: flex; align-items: center; gap: 4px;
@@ -2051,6 +2106,7 @@ async function runDebug() {
 .jg-loop      { background: linear-gradient(135deg, #f5f3ff, #c4b5fd); border-color: #8b5cf6; }
 .jg-delay     { background: linear-gradient(135deg, #f1f5f9, #cbd5e1); border-color: #64748b; }
 .jg-parallel  { background: linear-gradient(135deg, #fff1f2, #fecdd3); border-color: #e11d48; }
+.jg-notify    { background: linear-gradient(135deg, #ecfdf5, #a7f3d0); border-color: #059669; }
 
 /* Handle 连接点样式 */
 .jg-handle {

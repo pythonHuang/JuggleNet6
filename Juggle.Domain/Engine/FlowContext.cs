@@ -60,6 +60,22 @@ public class FlowContext
 
     // ========== 节点日志操作 ==========
 
+    /// <summary>添加一条简单的运行日志（非节点日志，用于通知等场景）</summary>
+    public void AddLog(string message)
+    {
+        NodeLogs.Add(new NodeLogEntry
+        {
+            SeqNo = NodeLogs.Count + 1,
+            NodeKey = "_system",
+            NodeLabel = "系统日志",
+            NodeType = "SYSTEM",
+            StartTime = DateTime.Now,
+            EndTime = DateTime.Now,
+            Status = "SUCCESS",
+            Detail = message
+        });
+    }
+
     public NodeLogEntry BeginNodeLog(string nodeKey, string nodeLabel, string nodeType)
     {
         var entry = new NodeLogEntry
