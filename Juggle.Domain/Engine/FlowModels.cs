@@ -9,7 +9,7 @@ public class FlowNode
     public string Key { get; set; } = "";
 
     [JsonPropertyName("elementType")]
-    public string ElementType { get; set; } = "";  // START END METHOD CONDITION ASSIGN CODE MYSQL(DB) MERGE
+    public string ElementType { get; set; } = "";  // START END METHOD CONDITION ASSIGN CODE MYSQL(DB) MERGE SUB_FLOW LOOP DELAY(WAIT)
 
     [JsonPropertyName("label")]
     public string? Label { get; set; }
@@ -53,6 +53,14 @@ public class FlowNode
     /// <summary>Mock 模式：设置后不发起真实请求，直接返回此 JSON 作为响应</summary>
     [JsonPropertyName("mockJson")]
     public string? MockJson { get; set; }
+
+    /// <summary>循环节点配置（LOOP 节点）</summary>
+    [JsonPropertyName("loopConfig")]
+    public LoopConfig? LoopConfig { get; set; }
+
+    /// <summary>延迟节点配置（DELAY/WAIT 节点）</summary>
+    [JsonPropertyName("delayConfig")]
+    public DelayConfig? DelayConfig { get; set; }
 }
 
 /// <summary>方法节点配置</summary>
@@ -229,4 +237,44 @@ public class MysqlConfig
     /// <summary>影响行数目标类型：VARIABLE（变量）/ OUTPUT（输出参数）</summary>
     [JsonPropertyName("affectedTargetType")]
     public string? AffectedTargetType { get; set; }
+}
+
+/// <summary>循环节点配置（LOOP 节点）</summary>
+public class LoopConfig
+{
+    /// <summary>要遍历的数组变量名（从流程上下文读取）</summary>
+    [JsonPropertyName("arrayVariable")]
+    public string ArrayVariable { get; set; } = "";
+
+    /// <summary>当前元素写入的变量名，默认 _loop_item</summary>
+    [JsonPropertyName("itemVariable")]
+    public string ItemVariable { get; set; } = "_loop_item";
+
+    /// <summary>当前索引写入的变量名，默认 _loop_index</summary>
+    [JsonPropertyName("indexVariable")]
+    public string IndexVariable { get; set; } = "_loop_index";
+
+    /// <summary>数组总长度写入的变量名，默认 _loop_total</summary>
+    [JsonPropertyName("totalVariable")]
+    public string TotalVariable { get; set; } = "_loop_total";
+
+    /// <summary>遍历结果写入的变量名，默认 _loop_results</summary>
+    [JsonPropertyName("outputVariable")]
+    public string OutputVariable { get; set; } = "_loop_results";
+}
+
+/// <summary>延迟节点配置（DELAY/WAIT 节点）</summary>
+public class DelayConfig
+{
+    /// <summary>延迟时间（毫秒），默认 1000</summary>
+    [JsonPropertyName("delayMs")]
+    public int DelayMs { get; set; } = 1000;
+
+    /// <summary>是否从变量读取延迟时间</summary>
+    [JsonPropertyName("variableMode")]
+    public bool VariableMode { get; set; } = false;
+
+    /// <summary>延迟时间变量名（variableMode=true 时生效）</summary>
+    [JsonPropertyName("delayVariable")]
+    public string? DelayVariable { get; set; }
 }

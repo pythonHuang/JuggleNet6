@@ -5,7 +5,7 @@ namespace Juggle.Domain.Engine;
 
 /// <summary>
 /// 流程执行引擎：解析流程 JSON，按节点拓扑顺序执行，维护变量上下文
-/// 支持节点类型：START / END / METHOD / CONDITION / ASSIGN / CODE / MYSQL(DB) / MERGE / SUB_FLOW
+/// 支持节点类型：START / END / METHOD / CONDITION / ASSIGN / CODE / MYSQL(DB) / MERGE / SUB_FLOW / LOOP / DELAY
 /// 支持功能：节点执行日志收集、静态全局变量读写、子流程递归调用
 /// </summary>
 public class FlowEngine
@@ -143,6 +143,8 @@ public class FlowEngine
                 "SUB_FLOW"      => new SubFlowNodeExecutor(
                     _flowContentLoader ?? throw new InvalidOperationException("当前引擎未配置 flowContentLoader，无法执行 SUB_FLOW 节点"),
                     _httpClientFactory, _dataSources, _staticVarSnapshot),
+                "LOOP"          => new LoopNodeExecutor(),
+                "DELAY" or "WAIT" => new DelayNodeExecutor(),
                 _ => throw new InvalidOperationException($"未知节点类型: {currentNode.ElementType}")
             };
 
