@@ -476,6 +476,25 @@
             </div>
           </template>
 
+          <!-- 通用配置：超时 + 重试（非 START/END/MERGE 节点） -->
+          <template v-if="!['START','END','MERGE','CONDITION'].includes(selectedNode.elementType)">
+            <div class="prop-section-title" style="margin-top:12px">⏱ 超时 / 重试</div>
+            <div class="prop-item">
+              <label>超时时间(ms)</label>
+              <el-input-number v-model="selectedNode.timeout" :min="0" :step="1000" size="small" style="width:100%"
+                placeholder="0=不限" />
+            </div>
+            <div class="prop-item">
+              <label>失败重试次数</label>
+              <el-input-number v-model="selectedNode.retryCount" :min="0" :max="10" size="small" style="width:100%"
+                placeholder="0=不重试" />
+            </div>
+            <div class="prop-item" v-if="selectedNode.retryCount > 0">
+              <label>重试间隔(ms)</label>
+              <el-input-number v-model="selectedNode.retryInterval" :min="200" :step="500" size="small" style="width:100%" />
+            </div>
+          </template>
+
           <!-- 连线提示（所有节点通用） -->
           <div class="prop-tip" style="margin-top:12px;background:#e6f4ff;color:#1890ff">
             💡 <b>连线方式：</b>拖动节点底部蓝色连接点到目标节点顶部，即可建立连线。也可直接在画布上拖动节点改变位置。
@@ -1422,7 +1441,7 @@ function addNode(type: string) {
   const x = lastVfNode ? lastVfNode.position.x + 220 : 200
   const y = lastVfNode ? lastVfNode.position.y : 200
 
-  const bNode: any = { key, elementType: type, incomings: [], outgoings: [], label: '', _x: x, _y: y }
+  const bNode: any = { key, elementType: type, incomings: [], outgoings: [], label: '', _x: x, _y: y, timeout: 0, retryCount: 0, retryInterval: 1000 }
   if (type === 'METHOD') {
     bNode.method = {
       suiteCode: '', methodCode: '', url: '', requestType: 'GET', contentType: 'JSON',

@@ -183,21 +183,57 @@ public class FlowEngine
                 continue;
             }
 
-            // 普通节点执行（带日志）
+            // 普通节点执行（带日志 + 超时 + 重试）
             var nodeLog = context.BeginNodeLog(currentNode.Key, currentNode.Label ?? currentNode.ElementType, currentNode.ElementType);
             nodeLog.InputSnapshot = SnapshotVariables(context.Variables);
 
             string? nextKey;
-            try
+            var retryCount = currentNode.RetryCount > 0 ? currentNode.RetryCount : 0;
+            var retryInterval = currentNode.RetryInterval > 0 ? currentNode.RetryInterval : 1000;
+            var timeout = currentNode.Timeout > 0 ? currentNode.Timeout : 0;
+            var attempts = 0;
+            Exception? lastEx = null;
+
+            while (attempts <= retryCount)
             {
-                nextKey = await executor.ExecuteAsync(currentNode, context);
-                nodeLog.Complete("SUCCESS");
-                nodeLog.OutputSnapshot = SnapshotVariables(context.Variables);
-            }
-            catch (Exception ex)
-            {
-                nodeLog.Complete("FAILED", errorMsg: ex.Message);
-                throw;
+                try
+                {
+                    if (timeout > 0)
+                    {
+                        // 带超时执行
+                        var cts = new System.Threading.CancellationTokenSource(timeout);
+                        var task = executor.ExecuteAsync(currentNode, context);
+                        var completedTask = await System.Threading.Tasks.Task.WhenAny(task, System.Threading.Tasks.Task.Delay(timeout, cts.Token));
+                        if (completedTask != task)
+                        {
+                            throw new TimeoutException($"节点 {currentNode.Key} 执行超时（{timeout}ms）");
+                        }
+                        nextKey = await task;
+                    }
+                    else
+                    {
+                        nextKey = await executor.ExecuteAsync(currentNode, context);
+                    }
+                    nodeLog.Complete("SUCCESS");
+                    nodeLog.OutputSnapshot = SnapshotVariables(context.Variables);
+                    lastEx = null;
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    lastEx = ex;
+                    attempts++;
+                    if (attempts <= retryCount)
+                    {
+                        nodeLog.Detail = $"第{attempts}次执行失败，{retryInterval}ms后重试: {ex.Message}";
+                        await System.Threading.Tasks.Task.Delay(retryInterval);
+                    }
+                    else
+                    {
+                        nodeLog.Complete("FAILED", errorMsg: ex.Message);
+                        throw;
+                    }
+                }
             }
 
             if (nextKey == null) break;

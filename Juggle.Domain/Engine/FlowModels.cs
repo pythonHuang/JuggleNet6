@@ -37,6 +37,18 @@ public class FlowNode
 
     [JsonPropertyName("subFlowConfig")]
     public SubFlowConfig? SubFlowConfig { get; set; }
+
+    /// <summary>节点执行超时时间（毫秒），0或不设置表示不限制</summary>
+    [JsonPropertyName("timeout")]
+    public int Timeout { get; set; } = 0;
+
+    /// <summary>失败重试次数，0或不设置表示不重试</summary>
+    [JsonPropertyName("retryCount")]
+    public int RetryCount { get; set; } = 0;
+
+    /// <summary>重试间隔（毫秒），默认1000ms</summary>
+    [JsonPropertyName("retryInterval")]
+    public int RetryInterval { get; set; } = 1000;
 }
 
 /// <summary>方法节点配置</summary>
