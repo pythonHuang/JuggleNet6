@@ -17,6 +17,11 @@
         <el-form-item label="流程名称">
           <el-input v-model="searchForm.flowName" placeholder="请输入流程名称" clearable />
         </el-form-item>
+        <el-form-item label="分组">
+          <el-select v-model="searchForm.groupName" placeholder="全部分组" clearable style="width:160px">
+            <el-option v-for="g in groupList" :key="g" :label="g" :value="g" />
+          </el-select>
+        </el-form-item>
         <el-form-item>
           <el-button type="primary" icon="Search" @click="loadData">查询</el-button>
           <el-button icon="Refresh" @click="reset">重置</el-button>
@@ -46,6 +51,12 @@
           </template>
         </el-table-column>
         <el-table-column prop="flowDesc" label="描述" show-overflow-tooltip />
+        <el-table-column prop="groupName" label="分组" width="120" show-overflow-tooltip>
+          <template #default="{ row }">
+            <el-tag v-if="row.groupName" size="small" type="info">{{ row.groupName }}</el-tag>
+            <span v-else style="color:#ccc">-</span>
+          </template>
+        </el-table-column>
         <el-table-column prop="createdAt" label="创建时间" width="180" show-overflow-tooltip />
         <el-table-column label="操作" width="260" fixed="right">
           <template #default="{ row }">
@@ -74,6 +85,11 @@
             <el-radio value="async">异步</el-radio>
           </el-radio-group>
         </el-form-item>
+        <el-form-item label="分组">
+          <el-select v-model="form.groupName" placeholder="选择或输入分组" clearable filterable allow-create style="width:100%">
+            <el-option v-for="g in groupList" :key="g" :label="g" :value="g" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="描述">
           <el-input v-model="form.flowDesc" type="textarea" :rows="2" />
         </el-form-item>
@@ -98,43 +114,52 @@ const router = useRouter()
 const loading = ref(false)
 const tableData = ref([])
 const selectedRows = ref<any[]>([])
-const searchForm = reactive({ flowName: '' })
+const searchForm = reactive({ flowName: '', groupName: '' })
+const groupList = ref<string[]>([])
 const page = reactive({ num: 1, size: 10, total: 0 })
 const dialogVisible = ref(false)
 const isEdit = ref(false)
 const formRef = ref()
 const importFileRef = ref<HTMLInputElement>()
-const form = reactive({ id: 0, flowName: '', flowType: 'sync', flowDesc: '' })
+const form = reactive({ id: 0, flowName: '', flowType: 'sync', flowDesc: '', groupName: '' })
 const rules = { flowName: [{ required: true, message: '请输入流程名称', trigger: 'blur' }] }
 
-onMounted(loadData)
+onMounted(() => { loadData(); loadGroups() })
 
 async function loadData() {
   loading.value = true
   try {
     const res: any = await request.post('/flow/definition/page', {
-      pageNum: page.num, pageSize: page.size, flowName: searchForm.flowName
+      pageNum: page.num, pageSize: page.size, flowName: searchForm.flowName, groupName: searchForm.groupName || undefined
     })
     tableData.value = res.data.records
     page.total = res.data.total
   } finally { loading.value = false }
 }
 
+async function loadGroups() {
+  try {
+    const res: any = await request.get('/flow/definition/groups')
+    groupList.value = res.data || []
+  } catch {}
+}
+
 function reset() {
   searchForm.flowName = ''
+  searchForm.groupName = ''
   page.num = 1
   loadData()
 }
 
 function openAdd() {
   isEdit.value = false
-  Object.assign(form, { id: 0, flowName: '', flowType: 'sync', flowDesc: '' })
+  Object.assign(form, { id: 0, flowName: '', flowType: 'sync', flowDesc: '', groupName: '' })
   dialogVisible.value = true
 }
 
 function openEdit(row: any) {
   isEdit.value = true
-  Object.assign(form, { id: row.id, flowName: row.flowName, flowType: row.flowType, flowDesc: row.flowDesc })
+  Object.assign(form, { id: row.id, flowName: row.flowName, flowType: row.flowType, flowDesc: row.flowDesc, groupName: row.groupName || '' })
   dialogVisible.value = true
 }
 

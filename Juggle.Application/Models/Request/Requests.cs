@@ -97,6 +97,7 @@ public class FlowDefinitionAddRequest
     public string FlowName { get; set; } = "";
     public string? FlowDesc { get; set; }
     public string FlowType { get; set; } = "sync";
+    public string? GroupName { get; set; }
 }
 
 public class FlowDefinitionUpdateRequest
@@ -105,6 +106,7 @@ public class FlowDefinitionUpdateRequest
     public string FlowName { get; set; } = "";
     public string? FlowDesc { get; set; }
     public string FlowType { get; set; } = "sync";
+    public string? GroupName { get; set; }
 }
 
 public class FlowDefinitionSaveRequest
@@ -116,6 +118,7 @@ public class FlowDefinitionSaveRequest
 public class FlowDefinitionPageRequest : PageRequest
 {
     public string? FlowName { get; set; }
+    public string? GroupName { get; set; }
 }
 
 public class FlowDeployRequest

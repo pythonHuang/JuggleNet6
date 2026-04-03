@@ -135,6 +135,7 @@ public class JuggleDbContext : DbContext
             e.Property(p => p.FlowDesc).HasColumnName("flow_desc");
             e.Property(p => p.FlowContent).HasColumnName("flow_content");
             e.Property(p => p.FlowType).HasColumnName("flow_type");
+            e.Property(p => p.GroupName).HasColumnName("group_name");
             e.Property(p => p.Status).HasColumnName("status");
         });
 

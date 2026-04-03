@@ -34,6 +34,7 @@ public class FlowDefinitionController : ControllerBase
             FlowName    = req.FlowName,
             FlowDesc    = req.FlowDesc,
             FlowType    = req.FlowType,
+            GroupName   = req.GroupName,
             FlowContent = "[]",
             Status      = 0,
             CreatedAt   = DateTime.Now.ToString("o")
@@ -62,6 +63,7 @@ public class FlowDefinitionController : ControllerBase
         entity.FlowName  = req.FlowName;
         entity.FlowDesc  = req.FlowDesc;
         entity.FlowType  = req.FlowType;
+        entity.GroupName = req.GroupName;
         entity.UpdatedAt = DateTime.Now.ToString("o");
         await _db.SaveChangesAsync();
         return ApiResult.Success();
@@ -119,6 +121,8 @@ public class FlowDefinitionController : ControllerBase
         var query = _db.FlowDefinitions.Where(f => f.Deleted == 0);
         if (!string.IsNullOrEmpty(req.FlowName))
             query = query.Where(f => f.FlowName!.Contains(req.FlowName));
+        if (!string.IsNullOrEmpty(req.GroupName))
+            query = query.Where(f => f.GroupName == req.GroupName);
         var total = await query.CountAsync();
         var records = await query
             .OrderByDescending(f => f.Id)
@@ -129,6 +133,18 @@ public class FlowDefinitionController : ControllerBase
         {
             Total = total, PageNum = req.PageNum, PageSize = req.PageSize, Records = records
         });
+    }
+
+    [HttpGet("groups")]
+    public async Task<ApiResult> Groups()
+    {
+        var groups = await _db.FlowDefinitions
+            .Where(f => f.Deleted == 0 && f.GroupName != null && f.GroupName != "")
+            .Select(f => f.GroupName!)
+            .Distinct()
+            .OrderBy(g => g)
+            .ToListAsync();
+        return ApiResult.Success(groups);
     }
 
     /// <summary>调试流程</summary>

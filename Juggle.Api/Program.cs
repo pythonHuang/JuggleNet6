@@ -181,6 +181,10 @@ CREATE TABLE IF NOT EXISTS t_static_variable (
     description   TEXT,
     group_name    TEXT
 );");
+
+    // 补建流程定义分组字段
+    try { db.Database.ExecuteSqlRaw("ALTER TABLE t_flow_definition ADD COLUMN group_name TEXT DEFAULT NULL;"); }
+    catch { /* 列已存在则忽略 */ }
 }
 
 if (app.Environment.IsDevelopment())
