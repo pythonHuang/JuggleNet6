@@ -39,6 +39,8 @@
             <el-radio-button value="sqlite">SQLite</el-radio-button>
             <el-radio-button value="postgresql">PostgreSQL</el-radio-button>
             <el-radio-button value="sqlserver">SQL Server</el-radio-button>
+            <el-radio-button value="oracle">Oracle</el-radio-button>
+            <el-radio-button value="dm">达梦</el-radio-button>
           </el-radio-group>
         </el-form-item>
 
@@ -57,7 +59,7 @@
           </el-form-item>
           <el-form-item label="端口" prop="port">
             <el-input-number v-model="form.port" :min="1" :max="65535" style="width:160px" />
-            <span class="port-hint">默认：MySQL=3306，PostgreSQL=5432，SQL Server=1433</span>
+            <span class="port-hint">默认：MySQL=3306，PostgreSQL=5432，SQL Server=1433，Oracle=1521，达梦=5236</span>
           </el-form-item>
           <el-form-item label="数据库名" prop="dbName">
             <el-input v-model="form.dbName" placeholder="数据库名称" />
@@ -118,7 +120,10 @@ async function loadData() {
 
 function onDsTypeChange(val: string) {
   // 自动更新默认端口
-  const portMap: Record<string, number> = { mysql: 3306, postgresql: 5432, sqlserver: 1433, sqlite: 0 }
+  const portMap: Record<string, number> = {
+    mysql: 3306, postgresql: 5432, sqlserver: 1433, sqlite: 0,
+    oracle: 1521, dm: 5236
+  }
   if (portMap[val] !== undefined) form.port = portMap[val]
 }
 
@@ -196,12 +201,18 @@ async function doDelete(row: any) {
 }
 
 function dbTypeLabel(type: string) {
-  const m: Record<string, string> = { mysql: 'MySQL', sqlite: 'SQLite', postgresql: 'PostgreSQL', sqlserver: 'SQL Server', mssql: 'SQL Server', postgres: 'PostgreSQL' }
+  const m: Record<string, string> = {
+    mysql: 'MySQL', sqlite: 'SQLite', postgresql: 'PostgreSQL', sqlserver: 'SQL Server',
+    mssql: 'SQL Server', postgres: 'PostgreSQL', oracle: 'Oracle', dm: '达梦'
+  }
   return m[type?.toLowerCase()] || type
 }
 
 function dbTypeColor(type: string) {
-  const m: Record<string, string> = { mysql: 'warning', sqlite: 'info', postgresql: 'success', sqlserver: 'danger', mssql: 'danger', postgres: 'success' }
+  const m: Record<string, string> = {
+    mysql: 'warning', sqlite: 'info', postgresql: 'success', sqlserver: 'danger',
+    mssql: 'danger', postgres: 'success', oracle: 'warning', dm: 'success'
+  }
   return m[type?.toLowerCase()] || ''
 }
 </script>

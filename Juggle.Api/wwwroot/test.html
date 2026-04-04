@@ -9,8 +9,10 @@
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f7fa; color: #333; }
     .header { background: #409eff; color: #fff; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; }
     .header h1 { font-size: 20px; font-weight: 600; }
+    .header-right { display: flex; align-items: center; gap: 12px; }
+    .user-info { font-size: 13px; opacity: 0.9; }
     .token-bar { display: flex; align-items: center; gap: 8px; }
-    .token-bar input { padding: 6px 12px; border: 1px solid rgba(255,255,255,.3); border-radius: 4px; background: rgba(255,255,255,.15); color: #fff; font-size: 13px; width: 300px; }
+    .token-bar input { padding: 6px 12px; border: 1px solid rgba(255,255,255,.3); border-radius: 4px; background: rgba(255,255,255,.15); color: #fff; font-size: 13px; width: 260px; }
     .token-bar input::placeholder { color: rgba(255,255,255,.6); }
     .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
 
@@ -21,6 +23,8 @@
     .method-tag { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 11px; font-weight: 700; color: #fff; margin-right: 8px; }
     .method-tag.post { background: #49cc90; }
     .method-tag.get { background: #61affe; }
+    .method-tag.put { background: #fca130; }
+    .method-tag.delete { background: #f93e3e; }
 
     .endpoint-url { font-family: 'Courier New', monospace; font-size: 13px; color: #555; }
 
@@ -29,6 +33,10 @@
 
     .send-btn { background: #409eff; color: #fff; border: none; padding: 8px 24px; border-radius: 4px; cursor: pointer; font-size: 14px; margin-top: 12px; }
     .send-btn:hover { background: #66b1ff; }
+    .login-btn { background: rgba(255,255,255,.2); color: #fff; border: 1px solid rgba(255,255,255,.4); padding: 6px 16px; border-radius: 4px; cursor: pointer; font-size: 13px; white-space: nowrap; }
+    .login-btn:hover { background: rgba(255,255,255,.3); }
+    .logout-btn { background: rgba(255,100,100,.3); color: #fff; border: 1px solid rgba(255,100,100,.5); padding: 6px 16px; border-radius: 4px; cursor: pointer; font-size: 13px; white-space: nowrap; }
+    .logout-btn:hover { background: rgba(255,100,100,.5); }
 
     .response-area { margin-top: 16px; }
     .response-status { font-size: 13px; margin-bottom: 8px; }
@@ -36,9 +44,9 @@
     .response-status.error { color: #f56c6c; }
     .response-body { background: #f8f9fa; border: 1px solid #eee; border-radius: 4px; padding: 12px; font-family: 'Courier New', monospace; font-size: 13px; white-space: pre-wrap; max-height: 400px; overflow-y: auto; }
 
-    .tabs { display: flex; gap: 0; border-bottom: 1px solid #dcdfe6; margin-bottom: 16px; }
-    .tab { padding: 8px 20px; cursor: pointer; border-bottom: 2px solid transparent; font-size: 14px; color: #909399; }
-    .tab.active { color: #409eff; border-bottom-color: #409eff; }
+    .tabs { display: flex; gap: 0; border-bottom: 2px solid #dcdfe6; margin-bottom: 16px; }
+    .tab { padding: 8px 20px; cursor: pointer; border-bottom: 2px solid transparent; font-size: 14px; color: #909399; margin-bottom: -2px; }
+    .tab.active { color: #409eff; border-bottom-color: #409eff; font-weight: 600; }
 
     .flow-item { border: 1px solid #ebeef5; border-radius: 6px; padding: 12px 16px; margin-bottom: 10px; cursor: pointer; transition: box-shadow .2s; }
     .flow-item:hover { box-shadow: 0 2px 8px rgba(0,0,0,.08); }
@@ -48,13 +56,47 @@
     .empty { text-align: center; color: #c0c4cc; padding: 40px; font-size: 14px; }
     .loading { text-align: center; padding: 20px; color: #909399; }
     textarea { resize: vertical; }
+
+    /* 登录弹窗 */
+    .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,.5); display: flex; align-items: center; justify-content: center; z-index: 999; }
+    .modal-overlay.hidden { display: none; }
+    .modal { background: #fff; border-radius: 8px; padding: 32px; width: 380px; box-shadow: 0 4px 20px rgba(0,0,0,.15); }
+    .modal h3 { margin-bottom: 20px; font-size: 18px; color: #333; }
+    .modal label { display: block; font-size: 13px; color: #666; margin-bottom: 4px; }
+    .modal input { width: 100%; padding: 8px 12px; border: 1px solid #dcdfe6; border-radius: 4px; font-size: 14px; margin-bottom: 16px; }
+    .modal input:focus { outline: none; border-color: #409eff; }
+    .modal .btn-row { display: flex; gap: 12px; justify-content: flex-end; }
+    .modal .btn-primary { background: #409eff; color: #fff; border: none; padding: 8px 24px; border-radius: 4px; cursor: pointer; }
+    .modal .btn-cancel { background: #fff; color: #666; border: 1px solid #dcdfe6; padding: 8px 24px; border-radius: 4px; cursor: pointer; }
+    .modal .error-msg { color: #f56c6c; font-size: 13px; margin-bottom: 12px; display: none; }
   </style>
 </head>
 <body>
   <div class="header">
     <h1>Juggle 接口测试</h1>
-    <div class="token-bar">
-      <input id="tokenInput" placeholder="输入 Access Token..." />
+    <div class="header-right">
+      <span id="userInfo" class="user-info"></span>
+      <div class="token-bar">
+        <input id="tokenInput" placeholder="输入 Access Token（开放接口用）..." />
+      </div>
+      <button id="loginBtn" class="login-btn" onclick="showLogin()">登录</button>
+      <button id="logoutBtn" class="logout-btn" onclick="doLogout()" style="display:none">退出</button>
+    </div>
+  </div>
+
+  <!-- 登录弹窗 -->
+  <div id="loginModal" class="modal-overlay hidden">
+    <div class="modal">
+      <h3>系统登录</h3>
+      <div id="loginError" class="error-msg"></div>
+      <label>用户名</label>
+      <input id="loginUser" type="text" placeholder="请输入用户名" value="juggle" />
+      <label>密码</label>
+      <input id="loginPass" type="password" placeholder="请输入密码" value="juggle" />
+      <div class="btn-row">
+        <button class="btn-cancel" onclick="hideLogin()">取消</button>
+        <button class="btn-primary" onclick="doLogin()">登录</button>
+      </div>
     </div>
   </div>
 
@@ -65,11 +107,11 @@
     </div>
 
     <div id="flowTab">
-      <div id="flowList" class="loading">加载中...</div>
+      <div id="flowList" class="loading">请先登录后加载数据...</div>
     </div>
 
     <div id="apiTab" style="display:none">
-      <div id="apiList" class="loading">加载中...</div>
+      <div id="apiList" class="loading">请先登录后加载数据...</div>
     </div>
   </div>
 
@@ -79,9 +121,109 @@
     let flows = [];
     let apis = [];
 
+    // ==================== JWT 登录态管理 ====================
+
+    function getJwt() {
+      return localStorage.getItem('juggle_jwt') || '';
+    }
+
+    function setJwt(token) {
+      localStorage.setItem('juggle_jwt', token);
+    }
+
+    function clearJwt() {
+      localStorage.removeItem('juggle_jwt');
+    }
+
+    /** 构建 API 请求 headers（自动携带 JWT） */
+    function apiHeaders(extra) {
+      const h = { 'Content-Type': 'application/json', ...(extra || {}) };
+      const jwt = getJwt();
+      if (jwt) h['Authorization'] = 'Bearer ' + jwt;
+      return h;
+    }
+
+    function updateLoginUI() {
+      const jwt = getJwt();
+      const loginBtn = document.getElementById('loginBtn');
+      const logoutBtn = document.getElementById('logoutBtn');
+      const userInfo = document.getElementById('userInfo');
+      if (jwt) {
+        loginBtn.style.display = 'none';
+        logoutBtn.style.display = '';
+        // 解析 JWT payload 获取用户名（不校验签名）
+        try {
+          const payload = JSON.parse(atob(jwt.split('.')[1]));
+          userInfo.textContent = payload['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name'] || payload['name'] || '已登录';
+        } catch { userInfo.textContent = '已登录'; }
+      } else {
+        loginBtn.style.display = '';
+        logoutBtn.style.display = 'none';
+        userInfo.textContent = '';
+      }
+    }
+
+    function showLogin() {
+      document.getElementById('loginModal').classList.remove('hidden');
+      document.getElementById('loginError').style.display = 'none';
+    }
+
+    function hideLogin() {
+      document.getElementById('loginModal').classList.add('hidden');
+    }
+
+    async function doLogin() {
+      const user = document.getElementById('loginUser').value.trim();
+      const pass = document.getElementById('loginPass').value.trim();
+      if (!user || !pass) { showLoginError('请输入用户名和密码'); return; }
+      try {
+        const res = await fetch(BASE + '/api/user/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: user, password: pass })
+        });
+        const json = await res.json();
+        if (json.code === 200 && json.data?.token) {
+          setJwt(json.data.token);
+          hideLogin();
+          updateLoginUI();
+          await loadFlows();
+          loadApis();
+        } else {
+          showLoginError(json.message || '登录失败');
+        }
+      } catch (e) {
+        showLoginError('网络错误：' + e.message);
+      }
+    }
+
+    function showLoginError(msg) {
+      const el = document.getElementById('loginError');
+      el.textContent = msg;
+      el.style.display = 'block';
+    }
+
+    function doLogout() {
+      clearJwt();
+      updateLoginUI();
+      document.getElementById('flowList').innerHTML = '<div class="loading">请先登录后加载数据...</div>';
+      document.getElementById('apiList').innerHTML = '<div class="loading">请先登录后加载数据...</div>';
+      flows = [];
+      apis = [];
+    }
+
+    // Enter 键快捷登录
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !document.getElementById('loginModal').classList.contains('hidden')) doLogin();
+    });
+
+    // ==================== Access Token（开放接口用） ====================
+
     function getToken() {
       return document.getElementById('tokenInput').value.trim();
     }
+
+    // ==================== Tab 切换 ====================
 
     function switchTab(tab) {
       currentTab = tab;
@@ -90,16 +232,24 @@
       document.getElementById('apiTab').style.display = tab === 'api' ? '' : 'none';
     }
 
+    // ==================== 流程列表 ====================
+
     async function loadFlows() {
       const el = document.getElementById('flowList');
       try {
         const res = await fetch(BASE + '/api/flow/info/page', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          method: 'POST',
+          headers: apiHeaders(),
           body: JSON.stringify({ pageNum: 1, pageSize: 500 })
         });
+        if (res.status === 401) {
+          el.innerHTML = '<div class="empty">请先登录系统以加载流程数据</div>';
+          showLogin();
+          return;
+        }
         const json = await res.json();
         flows = json.data?.records || [];
-        if (flows.length === 0) { el.innerHTML = '<div class="empty">暂无已部署的流程（需要登录后才能加载数据）</div>'; return; }
+        if (flows.length === 0) { el.innerHTML = '<div class="empty">暂无已部署的流程</div>'; return; }
         el.innerHTML = flows.map((f, i) => `
           <div class="flow-item" onclick="toggleFlowDetail(${i})">
             <div style="display:flex;justify-content:space-between;align-items:center">
@@ -120,7 +270,7 @@
             </div>
           </div>
         `).join('');
-      } catch (e) { el.innerHTML = '<div class="empty">加载流程列表失败（可能需要先登录控制台创建数据）</div>'; }
+      } catch (e) { el.innerHTML = '<div class="empty">加载流程列表失败：' + esc(e.message) + '</div>'; }
     }
 
     function toggleFlowDetail(i) {
@@ -131,7 +281,7 @@
     async function sendFlow(i) {
       const f = flows[i];
       const token = getToken();
-      if (!token) { alert('请输入 Access Token'); return; }
+      if (!token) { alert('请输入 Access Token（开放接口鉴权用）'); return; }
       const params = document.getElementById('flowParams_' + i).value;
       const resultEl = document.getElementById('flowResult_' + i);
       resultEl.style.display = '';
@@ -150,16 +300,23 @@
       }
     }
 
+    // ==================== 接口列表 ====================
+
     async function loadApis() {
       const el = document.getElementById('apiList');
       try {
-        const suitesRes = await fetch(BASE + '/api/suite/list');
+        const suitesRes = await fetch(BASE + '/api/suite/list', { headers: apiHeaders() });
+        if (suitesRes.status === 401) {
+          el.innerHTML = '<div class="empty">请先登录系统以加载接口数据</div>';
+          return;
+        }
         const suitesJson = await suitesRes.json();
         const suites = suitesJson.data || [];
         apis = [];
         for (const suite of suites) {
           const apisRes = await fetch(BASE + '/api/suite/api/list', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            method: 'POST',
+            headers: apiHeaders(),
             body: JSON.stringify({ suiteCode: suite.suiteCode })
           });
           const apisJson = await apisRes.json();
@@ -167,7 +324,7 @@
             apis.push({ ...api, suiteName: suite.suiteName });
           }
         }
-        if (apis.length === 0) { el.innerHTML = '<div class="empty">暂无接口（需要登录后才能加载数据）</div>'; return; }
+        if (apis.length === 0) { el.innerHTML = '<div class="empty">暂无接口数据</div>'; return; }
         el.innerHTML = apis.map((a, i) => `
           <div class="flow-item" onclick="toggleApiDetail(${i})">
             <div style="display:flex;justify-content:space-between;align-items:center">
@@ -187,7 +344,7 @@
             </div>
           </div>
         `).join('');
-      } catch (e) { el.innerHTML = '<div class="empty">加载接口列表失败（可能需要先登录控制台创建数据）</div>'; }
+      } catch (e) { el.innerHTML = '<div class="empty">加载接口列表失败：' + esc(e.message) + '</div>'; }
     }
 
     function toggleApiDetail(i) {
@@ -198,7 +355,7 @@
     async function sendApi(i) {
       const a = apis[i];
       const token = getToken();
-      if (!token) { alert('请输入 Access Token'); return; }
+      if (!token) { alert('请输入 Access Token（开放接口鉴权用）'); return; }
       const params = document.getElementById('apiParams_' + i).value;
       const resultEl = document.getElementById('apiResult_' + i);
       resultEl.style.display = '';
@@ -217,6 +374,8 @@
       }
     }
 
+    // ==================== 工具方法 ====================
+
     function esc(s) {
       if (s == null) return '';
       const div = document.createElement('div');
@@ -224,9 +383,15 @@
       return div.innerHTML;
     }
 
+    // ==================== 初始化 ====================
+
     (async () => {
-      await loadFlows();
-      loadApis();
+      updateLoginUI();
+      if (getJwt()) {
+        // 已有 JWT，自动加载数据
+        await loadFlows();
+        loadApis();
+      }
     })();
   </script>
 </body>

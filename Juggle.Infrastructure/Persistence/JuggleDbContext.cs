@@ -77,7 +77,7 @@ public class JuggleDbContext : DbContext
             e.Property(p => p.SuiteImage).HasColumnName("suite_image");
             e.Property(p => p.SuiteVersion).HasColumnName("suite_version");
             e.Property(p => p.SuiteDesc).HasColumnName("suite_desc");
-            e.Property(p => p.SuiteHelpDocJson).HasColumnName("suite_help_doc_json");
+            e.Property(p => p.SuiteHelpDocJson).HasColumnName("suite_help_doc_json").HasColumnType("text");
             e.Property(p => p.SuiteFlag).HasColumnName("suite_flag");
         });
 
@@ -95,7 +95,7 @@ public class JuggleDbContext : DbContext
             e.Property(p => p.Url).HasColumnName("url");
             e.Property(p => p.RequestType).HasColumnName("request_type");
             e.Property(p => p.ContentType).HasColumnName("content_type");
-            e.Property(p => p.MockJson).HasColumnName("mock_json");
+            e.Property(p => p.MockJson).HasColumnName("mock_json").HasColumnType("text");
             e.Property(p => p.MethodType).HasColumnName("method_type");
         });
 
@@ -141,7 +141,7 @@ public class JuggleDbContext : DbContext
             e.Property(p => p.FlowKey).HasColumnName("flow_key");
             e.Property(p => p.FlowName).HasColumnName("flow_name");
             e.Property(p => p.FlowDesc).HasColumnName("flow_desc");
-            e.Property(p => p.FlowContent).HasColumnName("flow_content");
+            e.Property(p => p.FlowContent).HasColumnName("flow_content").HasColumnType("text");
             e.Property(p => p.FlowType).HasColumnName("flow_type");
             e.Property(p => p.GroupName).HasColumnName("group_name");
             e.Property(p => p.Status).HasColumnName("status");
@@ -188,7 +188,7 @@ public class JuggleDbContext : DbContext
             e.Property(p => p.FlowInfoId).HasColumnName("flow_info_id");
             e.Property(p => p.FlowKey).HasColumnName("flow_key");
             e.Property(p => p.Version).HasColumnName("version");
-            e.Property(p => p.FlowContent).HasColumnName("flow_content");
+            e.Property(p => p.FlowContent).HasColumnName("flow_content").HasColumnType("text");
             e.Property(p => p.Status).HasColumnName("status");
         });
 
@@ -236,9 +236,9 @@ public class JuggleDbContext : DbContext
             e.Property(p => p.StartTime).HasColumnName("start_time");
             e.Property(p => p.EndTime).HasColumnName("end_time");
             e.Property(p => p.CostMs).HasColumnName("cost_ms");
-            e.Property(p => p.ErrorMessage).HasColumnName("error_message");
-            e.Property(p => p.InputJson).HasColumnName("input_json");
-            e.Property(p => p.OutputJson).HasColumnName("output_json");
+            e.Property(p => p.ErrorMessage).HasColumnName("error_message").HasColumnType("text");
+            e.Property(p => p.InputJson).HasColumnName("input_json").HasColumnType("text");
+            e.Property(p => p.OutputJson).HasColumnName("output_json").HasColumnType("text");
         });
 
         modelBuilder.Entity<FlowNodeLogEntity>(e => {
@@ -257,10 +257,10 @@ public class JuggleDbContext : DbContext
             e.Property(p => p.StartTime).HasColumnName("start_time");
             e.Property(p => p.EndTime).HasColumnName("end_time");
             e.Property(p => p.CostMs).HasColumnName("cost_ms");
-            e.Property(p => p.InputSnapshot).HasColumnName("input_snapshot");
-            e.Property(p => p.OutputSnapshot).HasColumnName("output_snapshot");
-            e.Property(p => p.Detail).HasColumnName("detail");
-            e.Property(p => p.ErrorMessage).HasColumnName("error_message");
+            e.Property(p => p.InputSnapshot).HasColumnName("input_snapshot").HasColumnType("text");
+            e.Property(p => p.OutputSnapshot).HasColumnName("output_snapshot").HasColumnType("text");
+            e.Property(p => p.Detail).HasColumnName("detail").HasColumnType("text");
+            e.Property(p => p.ErrorMessage).HasColumnName("error_message").HasColumnType("text");
         });
 
         modelBuilder.Entity<StaticVariableEntity>(e => {
@@ -353,11 +353,11 @@ public class JuggleDbContext : DbContext
             e.Property(p => p.UpdatedBy).HasColumnName("updated_by");
             e.Property(p => p.FlowKey).HasColumnName("flow_key");
             e.Property(p => p.CaseName).HasColumnName("case_name");
-            e.Property(p => p.InputJson).HasColumnName("input_json");
-            e.Property(p => p.AssertJson).HasColumnName("assert_json");
+            e.Property(p => p.InputJson).HasColumnName("input_json").HasColumnType("text");
+            e.Property(p => p.AssertJson).HasColumnName("assert_json").HasColumnType("text");
             e.Property(p => p.LastRunStatus).HasColumnName("last_run_status");
             e.Property(p => p.LastRunTime).HasColumnName("last_run_time");
-            e.Property(p => p.LastRunResult).HasColumnName("last_run_result");
+            e.Property(p => p.LastRunResult).HasColumnName("last_run_result").HasColumnType("text");
             e.Property(p => p.Remark).HasColumnName("remark");
         });
 

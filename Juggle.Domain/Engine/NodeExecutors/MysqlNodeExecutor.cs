@@ -5,12 +5,14 @@ using Microsoft.Data.Sqlite;
 using MySqlConnector;
 using Npgsql;
 using Microsoft.Data.SqlClient;
+using Oracle.ManagedDataAccess.Client;
+using Dm;
 
 namespace Juggle.Domain.Engine.NodeExecutors;
 
 /// <summary>
 /// 数据库节点执行器：执行 SQL 语句（使用数据源配置的数据库连接）
-/// 支持：SQLite / MySQL / PostgreSQL / SQL Server
+/// 支持：SQLite / MySQL / PostgreSQL / SQL Server / Oracle / 达梦(DM)
 /// 变量使用 Freemarker 风格模板：${varName}
 /// </summary>
 public class MysqlNodeExecutor : INodeExecutor
@@ -106,10 +108,12 @@ public class MysqlNodeExecutor : INodeExecutor
     {
         return dsInfo.DsType.ToLower() switch
         {
-            "sqlite"      => new SqliteConnection(dsInfo.ConnStr),
-            "mysql"       => new MySqlConnection(dsInfo.ConnStr),
-            "postgresql" or "postgres" => new NpgsqlConnection(dsInfo.ConnStr),
-            "sqlserver" or "mssql"     => new SqlConnection(dsInfo.ConnStr),
+            "sqlite"                    => new SqliteConnection(dsInfo.ConnStr),
+            "mysql"                     => new MySqlConnection(dsInfo.ConnStr),
+            "postgresql" or "postgres"  => new NpgsqlConnection(dsInfo.ConnStr),
+            "sqlserver" or "mssql"      => new SqlConnection(dsInfo.ConnStr),
+            "oracle"                    => new OracleConnection(dsInfo.ConnStr),
+            "dm"                        => new DmConnection(dsInfo.ConnStr),
             _ => throw new InvalidOperationException($"不支持的数据库类型: {dsInfo.DsType}")
         };
     }

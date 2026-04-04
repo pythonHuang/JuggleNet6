@@ -23,11 +23,60 @@ builder.Services.AddControllers().AddJsonOptions(opts =>
     opts.JsonSerializerOptions.Encoder                     = JavaScriptEncoder.Create(UnicodeRanges.All);
 });
 
-// SQLite + EF Core（支持 DB_PATH 环境变量，容器部署时指向挂载卷）
-var dbPath = Environment.GetEnvironmentVariable("DB_PATH")
-          ?? Path.Combine(Directory.GetCurrentDirectory(), "juggle.db");
-builder.Services.AddDbContext<JuggleDbContext>(opts =>
-    opts.UseSqlite($"Data Source={dbPath}"));
+// ==================== 数据库配置（支持多种数据库） ====================
+// 通过环境变量切换：DB_TYPE=sqlite|sqlserver|mysql|postgresql
+// 连接字符串通过：DB_CONNECTION_STRING 或各数据库专属变量设置
+var dbType = (Environment.GetEnvironmentVariable("DB_TYPE") ?? "sqlite").ToLower();
+var dbConnStr = Environment.GetEnvironmentVariable("DB_CONNECTION_STRING");
+
+void ConfigureDbContext(DbContextOptionsBuilder opts)
+{
+    switch (dbType)
+    {
+        case "sqlserver" or "mssql":
+            var sqlServerConn = dbConnStr
+                ?? $"Server={Env("DB_HOST","localhost")},{Env("DB_PORT","1433")};Database={Env("DB_NAME","juggle")};User Id={Env("DB_USER","sa")};Password={Env("DB_PASS","Juggle@2026")};TrustServerCertificate=True;";
+            opts.UseSqlServer(sqlServerConn);
+            break;
+        case "mysql":
+            var mysqlConn = dbConnStr
+                ?? $"Server={Env("DB_HOST","localhost")};Port={Env("DB_PORT","3306")};Database={Env("DB_NAME","juggle")};User={Env("DB_USER","root")};Password={Env("DB_PASS","juggle")};CharSet=utf8mb4;";
+            opts.UseMySql(mysqlConn, ServerVersion.AutoDetect(mysqlConn),
+                mySql => { mySql.EnableRetryOnFailure(3); });
+            break;
+        case "postgresql" or "postgres":
+            var pgConn = dbConnStr
+                ?? $"Host={Env("DB_HOST","localhost")};Port={Env("DB_PORT","5432")};Database={Env("DB_NAME","juggle")};Username={Env("DB_USER","postgres")};Password={Env("DB_PASS","juggle")};";
+            opts.UseNpgsql(pgConn);
+            break;
+        default: // sqlite
+            var dbPath = dbConnStr
+                ?? Environment.GetEnvironmentVariable("DB_PATH")
+                ?? Path.Combine(Directory.GetCurrentDirectory(), "juggle.db");
+            opts.UseSqlite($"Data Source={dbPath}");
+            break;
+    }
+}
+
+// 临时辅助函数
+static string Env(string key, string defaultValue) => Environment.GetEnvironmentVariable(key) ?? defaultValue;
+
+/// <summary>隐藏连接字符串中的密码部分</summary>
+static string MaskPassword(string connStr)
+{
+    if (string.IsNullOrEmpty(connStr)) return connStr;
+    return System.Text.RegularExpressions.Regex.Replace(
+        connStr,
+        @"(Password|PWD|User Id.*?Password)\s*=\s*[^;]+",
+        m => m.Value.Contains('=') ? m.Value.Substring(0, m.Value.IndexOf('=') + 1) + "***" : m.Value,
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase
+    );
+}
+
+builder.Services.AddDbContext<JuggleDbContext>(ConfigureDbContext);
+
+// 如果不是 SQLite，则需要在启动时确保数据库已迁移
+// SQLite 使用 EnsureCreated，其他数据库使用 Migrate 或 EnsureCreated
 
 // JWT 认证
 var jwtKey = builder.Configuration["Jwt:Key"] ?? "JuggleNet6SecretKey2026!";
@@ -116,98 +165,26 @@ builder.Services.AddCors(opts =>
 // ==================== 应用构建 ====================
 var app = builder.Build();
 
-// 自动迁移数据库：EnsureCreated 仅在首次创建时建表
-// 对于已存在的数据库，补建后续迭代新增的表（幂等 CREATE TABLE IF NOT EXISTS）
+// 启动日志：显示数据库类型
+Console.WriteLine($"[Juggle] 系统数据库类型: {dbType.ToUpper()}");
+if (!string.IsNullOrEmpty(dbConnStr))
+    Console.WriteLine($"[Juggle] 连接字符串: {MaskPassword(dbConnStr)}");
+
+// ==================== 数据库初始化 ====================
+// SQLite: EnsureCreated 自动建表
+// SQLServer/MySQL/PostgreSQL: EnsureCreated 自动建表（生产环境建议改用 Migration）
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<JuggleDbContext>();
     db.Database.EnsureCreated();
 
-    // 补建迭代四新增的三张表（若已存在则跳过）
-    db.Database.ExecuteSqlRaw(@"
-CREATE TABLE IF NOT EXISTS t_flow_log (
-    id           INTEGER PRIMARY KEY AUTOINCREMENT,
-    deleted      INTEGER NOT NULL DEFAULT 0,
-    created_at   TEXT,
-    created_by   TEXT,
-    updated_at   TEXT,
-    updated_by   TEXT,
-    flow_key     TEXT,
-    flow_name    TEXT,
-    version      INTEGER,
-    trigger_type TEXT,
-    status       TEXT,
-    start_time   TEXT,
-    end_time     TEXT,
-    cost_ms      INTEGER,
-    error_message TEXT,
-    input_json   TEXT,
-    output_json  TEXT
-);");
-
-    db.Database.ExecuteSqlRaw(@"
-CREATE TABLE IF NOT EXISTS t_flow_node_log (
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    deleted         INTEGER NOT NULL DEFAULT 0,
-    created_at      TEXT,
-    created_by      TEXT,
-    updated_at      TEXT,
-    updated_by      TEXT,
-    flow_log_id     INTEGER,
-    node_key        TEXT,
-    node_label      TEXT,
-    node_type       TEXT,
-    seq_no          INTEGER,
-    status          TEXT,
-    start_time      TEXT,
-    end_time        TEXT,
-    cost_ms         INTEGER,
-    input_snapshot  TEXT,
-    output_snapshot TEXT,
-    detail          TEXT,
-    error_message   TEXT
-);");
-
-    db.Database.ExecuteSqlRaw(@"
-CREATE TABLE IF NOT EXISTS t_static_variable (
-    id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    deleted       INTEGER NOT NULL DEFAULT 0,
-    created_at    TEXT,
-    created_by    TEXT,
-    updated_at    TEXT,
-    updated_by    TEXT,
-    var_code      TEXT NOT NULL,
-    var_name      TEXT,
-    data_type     TEXT,
-    value         TEXT,
-    default_value TEXT,
-    description   TEXT,
-    group_name    TEXT
-);");
-
-    // 补建流程定义分组字段
-    try { db.Database.ExecuteSqlRaw("ALTER TABLE t_flow_definition ADD COLUMN group_name TEXT DEFAULT NULL;"); }
-    catch { /* 列已存在则忽略 */ }
-
-    // 补建定时任务表
-    db.Database.ExecuteSqlRaw(@"
-CREATE TABLE IF NOT EXISTS t_schedule_task (
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    deleted         INTEGER NOT NULL DEFAULT 0,
-    created_at      TEXT,
-    created_by      TEXT,
-    updated_at      TEXT,
-    updated_by      TEXT,
-    flow_key        TEXT,
-    flow_name       TEXT,
-    cron_expression TEXT,
-    input_json      TEXT,
-    status          INTEGER NOT NULL DEFAULT 0,
-    last_run_time   TEXT,
-    last_run_status TEXT,
-    next_run_time   TEXT,
-    run_count       INTEGER NOT NULL DEFAULT 0
-);");
+    // 补建迭代新增字段/表（仅 SQLite 需要手动 ALTER TABLE，其他数据库由 Migration 处理）
+    if (dbType == "sqlite")
+    {
+        // 补建流程定义分组字段
+        try { db.Database.ExecuteSqlRaw("ALTER TABLE t_flow_definition ADD COLUMN group_name TEXT DEFAULT NULL;"); }
+        catch { /* 列已存在则忽略 */ }
+    }
 }
 
 if (app.Environment.IsDevelopment())
