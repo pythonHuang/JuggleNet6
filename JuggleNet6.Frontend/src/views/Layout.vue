@@ -7,41 +7,43 @@
       </div>
       <el-menu :default-active="activeMenu" router background-color="#001529"
         text-color="#aaa" active-text-color="#fff" style="border:none">
-        <el-sub-menu index="flow">
+        <el-sub-menu index="flow" v-if="hasMenu('/flow/define')">
           <template #title>
             <el-icon><Connection /></el-icon>
             <span>流程管理</span>
           </template>
-          <el-menu-item index="/flow/define">流程定义</el-menu-item>
-          <el-menu-item index="/flow/dashboard">监控仪表盘</el-menu-item>
-          <el-menu-item index="/flow/list">流程列表</el-menu-item>
-          <el-menu-item index="/flow/log">执行日志</el-menu-item>
-          <el-menu-item index="/flow/testcase">测试用例</el-menu-item>
-          <el-menu-item index="/flow/async-result">异步结果查询</el-menu-item>
+          <el-menu-item index="/flow/define" v-if="hasMenu('/flow/define')">流程定义</el-menu-item>
+          <el-menu-item index="/flow/dashboard" v-if="hasMenu('/flow/dashboard')">监控仪表盘</el-menu-item>
+          <el-menu-item index="/flow/list" v-if="hasMenu('/flow/list')">流程列表</el-menu-item>
+          <el-menu-item index="/flow/log" v-if="hasMenu('/flow/log')">执行日志</el-menu-item>
+          <el-menu-item index="/flow/testcase" v-if="hasMenu('/flow/testcase')">测试用例</el-menu-item>
+          <el-menu-item index="/flow/async-result" v-if="hasMenu('/flow/async-result')">异步结果查询</el-menu-item>
         </el-sub-menu>
-        <el-sub-menu index="suite">
+        <el-sub-menu index="suite" v-if="hasMenu('/suite/list')">
           <template #title>
             <el-icon><Grid /></el-icon>
             <span>套件管理</span>
           </template>
           <el-menu-item index="/suite/list">套件列表</el-menu-item>
         </el-sub-menu>
-        <el-menu-item index="/object/list">
+        <el-menu-item index="/object/list" v-if="hasMenu('/object/list')">
           <el-icon><DataBoard /></el-icon>
           <span>对象管理</span>
         </el-menu-item>
-        <el-sub-menu index="system">
+        <el-sub-menu index="system" v-if="hasMenu('/system/token')">
           <template #title>
             <el-icon><Setting /></el-icon>
             <span>系统设置</span>
           </template>
-          <el-menu-item index="/system/token">Token管理</el-menu-item>
-          <el-menu-item index="/system/datasource">数据源管理</el-menu-item>
-          <el-menu-item index="/system/static-var">静态变量</el-menu-item>
-          <el-menu-item index="/system/schedule">定时任务</el-menu-item>
-          <el-menu-item index="/system/webhook">Webhook 管理</el-menu-item>
-          <el-menu-item index="/system/users">用户管理</el-menu-item>
-          <el-menu-item index="/system/config">系统配置</el-menu-item>
+          <el-menu-item index="/system/token" v-if="hasMenu('/system/token')">Token管理</el-menu-item>
+          <el-menu-item index="/system/datasource" v-if="hasMenu('/system/datasource')">数据源管理</el-menu-item>
+          <el-menu-item index="/system/static-var" v-if="hasMenu('/system/static-var')">静态变量</el-menu-item>
+          <el-menu-item index="/system/schedule" v-if="hasMenu('/system/schedule')">定时任务</el-menu-item>
+          <el-menu-item index="/system/webhook" v-if="hasMenu('/system/webhook')">Webhook 管理</el-menu-item>
+          <el-menu-item index="/system/users" v-if="hasMenu('/system/users')">用户管理</el-menu-item>
+          <el-menu-item index="/system/role" v-if="hasMenu('/system/role')">角色管理</el-menu-item>
+          <el-menu-item index="/system/tenant" v-if="hasMenu('/system/tenant')">租户管理</el-menu-item>
+          <el-menu-item index="/system/config" v-if="hasMenu('/system/config')">系统配置</el-menu-item>
         </el-sub-menu>
       </el-menu>
     </el-aside>
@@ -66,7 +68,7 @@
         </el-dropdown>
       </el-header>
 
-      <!-- 主内容：el-main撑满剩余高度，overflow:hidden，内部router-view容器自行滚动 -->
+      <!-- 主内容 -->
       <el-main class="main-content">
         <div class="main-scroll">
           <router-view />
@@ -77,7 +79,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
 import { Connection, Grid, DataBoard, Setting, ArrowDown } from '@element-plus/icons-vue'
@@ -87,12 +89,31 @@ const router = useRouter()
 const userName = computed(() => localStorage.getItem('userName') || 'User')
 const activeMenu = computed(() => route.path)
 
+// 权限菜单列表
+const menuKeys = ref<string[]>([])
+try {
+  const stored = localStorage.getItem('menuKeys')
+  if (stored) menuKeys.value = JSON.parse(stored)
+} catch { /* ignore */ }
+
+const roleCode = computed(() => localStorage.getItem('roleCode') || '')
+
+function hasMenu(menuKey: string): boolean {
+  // 超级管理员显示所有菜单
+  if (roleCode.value === 'admin') return true
+  // 没有配置角色，显示所有菜单（兼容旧版本）
+  if (menuKeys.value.length === 0) return true
+  return menuKeys.value.includes(menuKey)
+}
+
 function handleCommand(cmd: string) {
   if (cmd === 'logout') {
     ElMessageBox.confirm('确认退出登录？', '提示', { type: 'warning' })
       .then(() => {
         localStorage.removeItem('token')
         localStorage.removeItem('userName')
+        localStorage.removeItem('roleCode')
+        localStorage.removeItem('menuKeys')
         router.push('/login')
       })
   }
@@ -111,7 +132,6 @@ function handleCommand(cmd: string) {
   gap: 8px;
   border-bottom: 1px solid #0a2540;
 }
-/* el-main 撑满剩余高度，自身不滚动 */
 .main-content {
   background: #f5f7fa;
   overflow: hidden;
@@ -119,7 +139,6 @@ function handleCommand(cmd: string) {
   display: flex;
   flex-direction: column;
 }
-/* 内部滚动容器：占满高度，普通页面在此滚动；FlowLog/FlowDesign等特殊页面自己 overflow:hidden 阻止此层滚动 */
 .main-scroll {
   flex: 1;
   min-height: 0;

@@ -12,6 +12,8 @@ public class UserAddRequest
 {
     public string UserName { get; set; } = "";
     public string Password { get; set; } = "";
+    public long? RoleId { get; set; }
+    public long? TenantId { get; set; }
 }
 
 public class UserResetPwdRequest
@@ -265,3 +267,39 @@ public class ScheduleTaskPageRequest : PageRequest
     public string? FlowKey { get; set; }
     public int? Status { get; set; }
 }
+
+// Role
+public class RoleAddRequest
+{
+    public string RoleName { get; set; } = "";
+    public string? RoleCode { get; set; }
+    public string? Remark { get; set; }
+    public List<string> MenuKeys { get; set; } = new();
+}
+
+public class RoleUpdateRequest
+{
+    public long Id { get; set; }
+    public string RoleName { get; set; } = "";
+    public string? RoleCode { get; set; }
+    public string? Remark { get; set; }
+    public List<string> MenuKeys { get; set; } = new();
+}
+
+// Tenant
+public class TenantAddRequest
+{
+    public string TenantName { get; set; } = "";
+    public string? TenantCode { get; set; }
+    public string? Remark { get; set; }
+}
+
+public class TenantUpdateRequest
+{
+    public long Id { get; set; }
+    public string TenantName { get; set; } = "";
+    public string? TenantCode { get; set; }
+    public string? Remark { get; set; }
+    public int Status { get; set; }
+}
+

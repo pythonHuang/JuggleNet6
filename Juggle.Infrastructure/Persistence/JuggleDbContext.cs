@@ -26,6 +26,9 @@ public class JuggleDbContext : DbContext
     public DbSet<WebhookEntity> Webhooks { get; set; } = null!;
     public DbSet<SystemConfigEntity> SystemConfigs { get; set; } = null!;
     public DbSet<FlowTestCaseEntity> FlowTestCases { get; set; } = null!;
+    public DbSet<RoleEntity> Roles { get; set; } = null!;
+    public DbSet<RoleMenuEntity> RoleMenus { get; set; } = null!;
+    public DbSet<TenantEntity> Tenants { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -51,6 +54,9 @@ public class JuggleDbContext : DbContext
         modelBuilder.Entity<WebhookEntity>().ToTable("t_webhook");
         modelBuilder.Entity<SystemConfigEntity>().ToTable("t_system_config");
         modelBuilder.Entity<FlowTestCaseEntity>().ToTable("t_flow_test_case");
+        modelBuilder.Entity<RoleEntity>().ToTable("t_role");
+        modelBuilder.Entity<RoleMenuEntity>().ToTable("t_role_menu");
+        modelBuilder.Entity<TenantEntity>().ToTable("t_tenant");
 
         // 列名映射（snake_case）
         modelBuilder.Entity<UserEntity>(e => {
@@ -62,6 +68,8 @@ public class JuggleDbContext : DbContext
             e.Property(p => p.UpdatedBy).HasColumnName("updated_by");
             e.Property(p => p.UserName).HasColumnName("user_name");
             e.Property(p => p.Password).HasColumnName("password");
+            e.Property(p => p.RoleId).HasColumnName("role_id");
+            e.Property(p => p.TenantId).HasColumnName("tenant_id");
         });
 
         modelBuilder.Entity<SuiteEntity>(e => {
@@ -362,13 +370,60 @@ public class JuggleDbContext : DbContext
         });
 
         // 初始数据
+        modelBuilder.Entity<TenantEntity>().HasData(new TenantEntity
+        {
+            Id = 1, TenantName = "默认租户", TenantCode = "default", Status = 1,
+            Deleted = 0, CreatedAt = "2026-01-01T00:00:00"
+        });
+        modelBuilder.Entity<RoleEntity>().HasData(new RoleEntity
+        {
+            Id = 1, RoleName = "超级管理员", RoleCode = "admin",
+            Remark = "拥有所有权限", Deleted = 0, CreatedAt = "2026-01-01T00:00:00"
+        });
         modelBuilder.Entity<UserEntity>().HasData(new UserEntity
         {
             Id = 1,
             UserName = "juggle",
             Password = "24cb6bcbc65730e9650745d379613563", // juggle MD5
+            RoleId = 1,
+            TenantId = 1,
             Deleted = 0,
             CreatedAt = "2026-01-01T00:00:00"
+        });
+
+        // 角色列映射
+        modelBuilder.Entity<RoleEntity>(e => {
+            e.Property(p => p.Id).HasColumnName("id");
+            e.Property(p => p.Deleted).HasColumnName("deleted");
+            e.Property(p => p.CreatedAt).HasColumnName("created_at");
+            e.Property(p => p.CreatedBy).HasColumnName("created_by");
+            e.Property(p => p.UpdatedAt).HasColumnName("updated_at");
+            e.Property(p => p.UpdatedBy).HasColumnName("updated_by");
+            e.Property(p => p.RoleName).HasColumnName("role_name");
+            e.Property(p => p.RoleCode).HasColumnName("role_code");
+            e.Property(p => p.Remark).HasColumnName("remark");
+        });
+        modelBuilder.Entity<RoleMenuEntity>(e => {
+            e.Property(p => p.Id).HasColumnName("id");
+            e.Property(p => p.Deleted).HasColumnName("deleted");
+            e.Property(p => p.CreatedAt).HasColumnName("created_at");
+            e.Property(p => p.CreatedBy).HasColumnName("created_by");
+            e.Property(p => p.UpdatedAt).HasColumnName("updated_at");
+            e.Property(p => p.UpdatedBy).HasColumnName("updated_by");
+            e.Property(p => p.RoleId).HasColumnName("role_id");
+            e.Property(p => p.MenuKey).HasColumnName("menu_key");
+        });
+        modelBuilder.Entity<TenantEntity>(e => {
+            e.Property(p => p.Id).HasColumnName("id");
+            e.Property(p => p.Deleted).HasColumnName("deleted");
+            e.Property(p => p.CreatedAt).HasColumnName("created_at");
+            e.Property(p => p.CreatedBy).HasColumnName("created_by");
+            e.Property(p => p.UpdatedAt).HasColumnName("updated_at");
+            e.Property(p => p.UpdatedBy).HasColumnName("updated_by");
+            e.Property(p => p.TenantName).HasColumnName("tenant_name");
+            e.Property(p => p.TenantCode).HasColumnName("tenant_code");
+            e.Property(p => p.Remark).HasColumnName("remark");
+            e.Property(p => p.Status).HasColumnName("status");
         });
     }
 }

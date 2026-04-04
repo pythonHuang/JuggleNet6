@@ -34,8 +34,35 @@ public class UserController : ControllerBase
         if (user == null)
             return ApiResult.Fail("用户名或密码错误", 401);
 
+        // 检查租户是否禁用
+        if (user.TenantId.HasValue)
+        {
+            var tenant = await _db.Tenants.FindAsync(user.TenantId.Value);
+            if (tenant == null || tenant.Deleted == 1 || tenant.Status == 0)
+                return ApiResult.Fail("租户已被禁用，无法登录", 403);
+        }
+
         var tokenStr = _jwtService.GenerateToken(user);
-        return ApiResult.Success(new { token = tokenStr, userName = user.UserName });
+
+        // 查询菜单权限
+        List<string> menuKeys = new();
+        if (user.RoleId.HasValue && user.RoleId != 1)
+        {
+            // 非超级管理员，查询角色菜单
+            menuKeys = await _db.RoleMenus
+                .Where(rm => rm.RoleId == user.RoleId && rm.Deleted == 0)
+                .Select(rm => rm.MenuKey)
+                .ToListAsync();
+        }
+        // 超级管理员返回空列表，前端根据 roleCode="admin" 显示全部菜单
+
+        return ApiResult.Success(new
+        {
+            token    = tokenStr,
+            userName = user.UserName,
+            roleCode = user.RoleId == 1 ? "admin" : "",
+            menuKeys
+        });
     }
 
     /// <summary>用户分页列表（需登录）</summary>
@@ -49,7 +76,12 @@ public class UserController : ControllerBase
         var records = await query.OrderByDescending(u => u.Id)
             .Skip((req.PageNum - 1) * req.PageSize)
             .Take(req.PageSize)
-            .Select(u => new { u.Id, u.UserName, u.CreatedAt, u.UpdatedAt })
+            .Select(u => new
+            {
+                u.Id, u.UserName, u.RoleId, u.TenantId, u.CreatedAt, u.UpdatedAt,
+                RoleName = _db.Roles.Where(r => r.Id == u.RoleId && r.Deleted == 0).Select(r => r.RoleName).FirstOrDefault(),
+                TenantName = _db.Tenants.Where(t => t.Id == u.TenantId && t.Deleted == 0).Select(t => t.TenantName).FirstOrDefault()
+            })
             .ToListAsync();
         return ApiResult.Success(new { total, records });
     }
@@ -69,6 +101,8 @@ public class UserController : ControllerBase
         {
             UserName  = req.UserName,
             Password  = Md5Helper.Encrypt(req.Password),
+            RoleId    = req.RoleId,
+            TenantId  = req.TenantId,
             Deleted   = 0,
             CreatedAt = DateTime.Now.ToString("o")
         };

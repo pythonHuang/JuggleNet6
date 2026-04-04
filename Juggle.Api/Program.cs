@@ -1,7 +1,8 @@
+using Juggle.Application.Services;
+using Juggle.Application.Services.Impl;
 using Juggle.Domain.Engine;
 using Juggle.Infrastructure.Persistence;
 using Juggle.Application.Services.Flow;
-using Juggle.Application.Services.Impl;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -24,42 +25,61 @@ builder.Services.AddControllers().AddJsonOptions(opts =>
 });
 
 // ==================== 数据库配置（支持多种数据库） ====================
-// 通过环境变量切换：DB_TYPE=sqlite|sqlserver|mysql|postgresql
-// 连接字符串通过：DB_CONNECTION_STRING 或各数据库专属变量设置
-var dbType = (Environment.GetEnvironmentVariable("DB_TYPE") ?? "sqlite").ToLower();
-var dbConnStr = Environment.GetEnvironmentVariable("DB_CONNECTION_STRING");
+// 优先级：环境变量 > appsettings.json > 默认值
+// 环境变量：DB_TYPE=sqlite|sqlserver|mysql|postgresql，DB_CONNECTION_STRING 直接指定连接串
+// 配置文件：appsettings.json → Database 节
+var dbSection = builder.Configuration.GetSection("Database");
+var dbType    = (Environment.GetEnvironmentVariable("DB_TYPE") ?? dbSection["Type"] ?? "sqlite").ToLower();
+var dbConnStr = Environment.GetEnvironmentVariable("DB_CONNECTION_STRING") ?? dbSection["ConnectionString"] ?? "";
+
+// 辅助：从配置或环境变量读取值
+string Cfg(string configKey, string envKey, string defaultValue)
+    => Environment.GetEnvironmentVariable(envKey) ?? dbSection[configKey] ?? defaultValue;
 
 void ConfigureDbContext(DbContextOptionsBuilder opts)
 {
     switch (dbType)
     {
         case "sqlserver" or "mssql":
-            var sqlServerConn = dbConnStr
-                ?? $"Server={Env("DB_HOST","localhost")},{Env("DB_PORT","1433")};Database={Env("DB_NAME","juggle")};User Id={Env("DB_USER","sa")};Password={Env("DB_PASS","Juggle@2026")};TrustServerCertificate=True;";
+            var sqlServerConn = !string.IsNullOrEmpty(dbConnStr) ? dbConnStr
+                : $"Server={Cfg("SqlServer:Host","DB_HOST","localhost")},{Cfg("SqlServer:Port","DB_PORT","1433")};"
+                + $"Database={Cfg("SqlServer:Database","DB_NAME","juggle")};"
+                + $"User Id={Cfg("SqlServer:UserId","DB_USER","sa")};"
+                + $"Password={Cfg("SqlServer:Password","DB_PASS","Juggle@2026")};"
+                + $"TrustServerCertificate={(Cfg("SqlServer:TrustServerCertificate","","true").ToLower() == "true" ? "True" : "False")};";
             opts.UseSqlServer(sqlServerConn);
             break;
         case "mysql":
-            var mysqlConn = dbConnStr
-                ?? $"Server={Env("DB_HOST","localhost")};Port={Env("DB_PORT","3306")};Database={Env("DB_NAME","juggle")};User={Env("DB_USER","root")};Password={Env("DB_PASS","juggle")};CharSet=utf8mb4;";
+            var mysqlConn = !string.IsNullOrEmpty(dbConnStr) ? dbConnStr
+                : $"Server={Cfg("MySql:Host","DB_HOST","localhost")};"
+                + $"Port={Cfg("MySql:Port","DB_PORT","3306")};"
+                + $"Database={Cfg("MySql:Database","DB_NAME","juggle")};"
+                + $"User={Cfg("MySql:UserId","DB_USER","root")};"
+                + $"Password={Cfg("MySql:Password","DB_PASS","juggle")};"
+                + $"CharSet={Cfg("MySql:CharSet","","utf8mb4")};";
             opts.UseMySql(mysqlConn, ServerVersion.AutoDetect(mysqlConn),
                 mySql => { mySql.EnableRetryOnFailure(3); });
             break;
         case "postgresql" or "postgres":
-            var pgConn = dbConnStr
-                ?? $"Host={Env("DB_HOST","localhost")};Port={Env("DB_PORT","5432")};Database={Env("DB_NAME","juggle")};Username={Env("DB_USER","postgres")};Password={Env("DB_PASS","juggle")};";
+            var pgConn = !string.IsNullOrEmpty(dbConnStr) ? dbConnStr
+                : $"Host={Cfg("PostgreSql:Host","DB_HOST","localhost")};"
+                + $"Port={Cfg("PostgreSql:Port","DB_PORT","5432")};"
+                + $"Database={Cfg("PostgreSql:Database","DB_NAME","juggle")};"
+                + $"Username={Cfg("PostgreSql:UserId","DB_USER","postgres")};"
+                + $"Password={Cfg("PostgreSql:Password","DB_PASS","juggle")};";
             opts.UseNpgsql(pgConn);
             break;
         default: // sqlite
-            var dbPath = dbConnStr
-                ?? Environment.GetEnvironmentVariable("DB_PATH")
-                ?? Path.Combine(Directory.GetCurrentDirectory(), "juggle.db");
+            var dbPath = !string.IsNullOrEmpty(dbConnStr) ? dbConnStr
+                : Environment.GetEnvironmentVariable("DB_PATH")
+                ?? dbSection["Sqlite:DataSource"]
+                ?? "juggle.db";
+            if (!Path.IsPathRooted(dbPath))
+                dbPath = Path.Combine(Directory.GetCurrentDirectory(), dbPath);
             opts.UseSqlite($"Data Source={dbPath}");
             break;
     }
 }
-
-// 临时辅助函数
-static string Env(string key, string defaultValue) => Environment.GetEnvironmentVariable(key) ?? defaultValue;
 
 /// <summary>隐藏连接字符串中的密码部分</summary>
 static string MaskPassword(string connStr)
@@ -129,6 +149,7 @@ builder.Services.AddHostedService<Juggle.Api.Services.ScheduleTaskService>();
 builder.Services.AddScoped<FlowExecutionService>();  // 流程执行核心（数据源、静态变量、日志）
 builder.Services.AddScoped<DataSourceService>();     // 数据源连接字符串构建 + 连接测试
 builder.Services.AddScoped<JwtService>();            // JWT Token 签发
+builder.Services.AddScoped<ITenantAccessor, TenantAccessor>();  // 多租户上下文
 
 // Swagger
 builder.Services.AddEndpointsApiExplorer();
@@ -202,6 +223,22 @@ else
 app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
+
+// 多租户中间件：从 JWT Claims 中提取 TenantId 注入 ITenantAccessor
+app.Use(async (ctx, next) =>
+{
+    var tenantAccessor = ctx.RequestServices.GetRequiredService<ITenantAccessor>();
+    // 开放接口（/open/）和健康检查不设置租户
+    if (!ctx.Request.Path.StartsWithSegments("/open") && ctx.Request.Path != "/api/health")
+    {
+        var tenantClaim = ctx.User.FindFirst("TenantId");
+        if (tenantClaim != null && long.TryParse(tenantClaim.Value, out var tid))
+        {
+            tenantAccessor.TenantId = tid;
+        }
+    }
+    await next();
+});
 
 // 前端静态文件（生产环境）
 app.UseDefaultFiles();

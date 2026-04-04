@@ -48,6 +48,8 @@ async function handleLogin() {
     const res: any = await request.post('/user/login', form.value)
     localStorage.setItem('token', res.data.token)
     localStorage.setItem('userName', res.data.userName)
+    localStorage.setItem('roleCode', res.data.roleCode || '')
+    localStorage.setItem('menuKeys', JSON.stringify(res.data.menuKeys || []))
     ElMessage.success('登录成功')
     router.push('/')
   } finally {
