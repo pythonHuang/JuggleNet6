@@ -24,6 +24,8 @@ public class JuggleDbContext : DbContext
     public DbSet<StaticVariableEntity> StaticVariables { get; set; } = null!;
     public DbSet<ScheduleTaskEntity> ScheduleTasks { get; set; } = null!;
     public DbSet<WebhookEntity> Webhooks { get; set; } = null!;
+    public DbSet<SystemConfigEntity> SystemConfigs { get; set; } = null!;
+    public DbSet<FlowTestCaseEntity> FlowTestCases { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -47,6 +49,8 @@ public class JuggleDbContext : DbContext
         modelBuilder.Entity<TokenPermissionEntity>().ToTable("t_token_permission");
         modelBuilder.Entity<ScheduleTaskEntity>().ToTable("t_schedule_task");
         modelBuilder.Entity<WebhookEntity>().ToTable("t_webhook");
+        modelBuilder.Entity<SystemConfigEntity>().ToTable("t_system_config");
+        modelBuilder.Entity<FlowTestCaseEntity>().ToTable("t_flow_test_case");
 
         // 列名映射（snake_case）
         modelBuilder.Entity<UserEntity>(e => {
@@ -323,6 +327,37 @@ public class JuggleDbContext : DbContext
             e.Property(p => p.Status).HasColumnName("status");
             e.Property(p => p.TriggerCount).HasColumnName("trigger_count");
             e.Property(p => p.LastTriggerTime).HasColumnName("last_trigger_time");
+            e.Property(p => p.Remark).HasColumnName("remark");
+        });
+
+        modelBuilder.Entity<SystemConfigEntity>(e => {
+            e.Property(p => p.Id).HasColumnName("id");
+            e.Property(p => p.Deleted).HasColumnName("deleted");
+            e.Property(p => p.CreatedAt).HasColumnName("created_at");
+            e.Property(p => p.CreatedBy).HasColumnName("created_by");
+            e.Property(p => p.UpdatedAt).HasColumnName("updated_at");
+            e.Property(p => p.UpdatedBy).HasColumnName("updated_by");
+            e.Property(p => p.ConfigKey).HasColumnName("config_key");
+            e.Property(p => p.ConfigValue).HasColumnName("config_value");
+            e.Property(p => p.ConfigName).HasColumnName("config_name");
+            e.Property(p => p.ConfigGroup).HasColumnName("config_group");
+            e.Property(p => p.Remark).HasColumnName("remark");
+        });
+
+        modelBuilder.Entity<FlowTestCaseEntity>(e => {
+            e.Property(p => p.Id).HasColumnName("id");
+            e.Property(p => p.Deleted).HasColumnName("deleted");
+            e.Property(p => p.CreatedAt).HasColumnName("created_at");
+            e.Property(p => p.CreatedBy).HasColumnName("created_by");
+            e.Property(p => p.UpdatedAt).HasColumnName("updated_at");
+            e.Property(p => p.UpdatedBy).HasColumnName("updated_by");
+            e.Property(p => p.FlowKey).HasColumnName("flow_key");
+            e.Property(p => p.CaseName).HasColumnName("case_name");
+            e.Property(p => p.InputJson).HasColumnName("input_json");
+            e.Property(p => p.AssertJson).HasColumnName("assert_json");
+            e.Property(p => p.LastRunStatus).HasColumnName("last_run_status");
+            e.Property(p => p.LastRunTime).HasColumnName("last_run_time");
+            e.Property(p => p.LastRunResult).HasColumnName("last_run_result");
             e.Property(p => p.Remark).HasColumnName("remark");
         });
 
