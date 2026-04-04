@@ -1,6 +1,6 @@
 <template>
   <div class="static-var-page">
-    <el-card shadow="never">
+    <el-card shadow="never" class="table-card">
       <template #header>
         <div style="display:flex;align-items:center;justify-content:space-between">
           <span>全局静态变量管理</span>
@@ -24,7 +24,7 @@
         </template>
       </el-alert>
 
-      <el-table :data="varList" stripe border size="small" v-loading="loading">
+      <el-table :data="varList" stripe border size="small" v-loading="loading" height="100%">
         <el-table-column prop="varCode" label="变量编码" min-width="140" show-overflow-tooltip />
         <el-table-column prop="varName" label="变量名称" min-width="120" show-overflow-tooltip />
         <el-table-column prop="dataType" label="类型" width="90">
@@ -190,7 +190,33 @@ onMounted(() => loadList())
 </script>
 
 <style scoped>
-.static-var-page { padding: 16px; }
+.static-var-page {
+  padding: 16px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+.table-card {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.table-card :deep(.el-card__body) {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding-bottom: 0;
+}
+.table-card :deep(.el-table) {
+  flex: 1;
+  min-height: 0;
+}
 code {
   background: #f0f0f0;
   padding: 1px 4px;

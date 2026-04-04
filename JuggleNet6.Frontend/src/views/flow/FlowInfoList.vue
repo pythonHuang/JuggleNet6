@@ -3,8 +3,8 @@
     <div class="page-header">
       <h2>流程列表（已部署）</h2>
     </div>
-    <el-card>
-      <el-table :data="tableData" stripe v-loading="loading">
+    <el-card class="table-card">
+      <el-table :data="tableData" stripe v-loading="loading" height="100%">
         <el-table-column prop="flowKey" label="流程Key" width="200" show-overflow-tooltip />
         <el-table-column prop="flowName" label="流程名称" />
         <el-table-column prop="flowType" label="类型" width="80">
@@ -24,9 +24,11 @@
           </template>
         </el-table-column>
       </el-table>
-      <el-pagination v-model:current-page="page.num" v-model:page-size="page.size"
-        :total="page.total" layout="total,prev,pager,next" style="margin-top:16px;justify-content:flex-end"
-        @current-change="loadData" />
+      <div class="pagination-bar">
+        <el-pagination v-model:current-page="page.num" v-model:page-size="page.size"
+          :total="page.total" layout="total,prev,pager,next"
+          @current-change="loadData" />
+      </div>
     </el-card>
   </div>
 </template>
@@ -69,7 +71,45 @@ function copyFlowUrl(row: any) {
 </script>
 
 <style scoped>
-.page-container { padding: 20px; }
-.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.page-container {
+  padding: 16px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  flex-shrink: 0;
+}
 .page-header h2 { font-size: 20px; color: #333; }
+.table-card {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.table-card :deep(.el-card__body) {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding-bottom: 0;
+}
+.table-card :deep(.el-table) {
+  flex: 1;
+  min-height: 0;
+}
+.pagination-bar {
+  flex-shrink: 0;
+  padding: 10px 0 2px;
+  display: flex;
+  justify-content: flex-end;
+}
 </style>

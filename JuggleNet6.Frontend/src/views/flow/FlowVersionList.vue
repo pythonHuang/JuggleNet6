@@ -7,8 +7,8 @@
       </div>
       <el-button type="warning" @click="openDiffDialog" icon="Switch" :disabled="tableData.length < 2">版本对比</el-button>
     </div>
-    <el-card>
-      <el-table :data="tableData" stripe v-loading="loading">
+    <el-card class="table-card">
+      <el-table :data="tableData" stripe v-loading="loading" height="100%">
         <el-table-column prop="version" label="版本号" width="100" />
         <el-table-column prop="status" label="状态" width="80">
           <template #default="{ row }">
@@ -241,8 +241,39 @@ function copyJson() {
 </script>
 
 <style scoped>
-.page-container { padding: 20px; }
-.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.page-container {
+  padding: 16px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  flex-shrink: 0;
+}
+.table-card {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.table-card :deep(.el-card__body) {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.table-card :deep(.el-table) {
+  flex: 1;
+  min-height: 0;
+}
 .diff-summary { display: flex; gap: 8px; margin-bottom: 12px; }
 .diff-code { background: #1e1e1e; color: #d4d4d4; border-radius: 8px; padding: 12px; font-family: 'Consolas', 'Monaco', monospace; font-size: 13px; overflow: auto; max-height: 60vh; }
 .diff-line { display: flex; gap: 8px; line-height: 1.6; padding: 0 4px; }

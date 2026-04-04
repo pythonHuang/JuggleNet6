@@ -4,8 +4,8 @@
       <h2>Token 管理</h2>
       <el-button type="primary" icon="Plus" @click="openAdd">新建 Token</el-button>
     </div>
-    <el-card>
-      <el-table :data="tableData" stripe v-loading="loading">
+    <el-card class="table-card">
+      <el-table :data="tableData" stripe v-loading="loading" height="100%">
         <el-table-column prop="tokenName" label="Token名称" />
         <el-table-column prop="tokenValue" label="Token值" show-overflow-tooltip />
         <el-table-column prop="expiredAt" label="过期时间" width="180" show-overflow-tooltip />
@@ -214,8 +214,39 @@ async function savePermissions() {
 </script>
 
 <style scoped>
-.page-container { padding: 20px; }
-.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.page-container {
+  padding: 16px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  flex-shrink: 0;
+}
 .page-header h2 { font-size: 20px; color: #333; }
+.table-card {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.table-card :deep(.el-card__body) {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.table-card :deep(.el-table) {
+  flex: 1;
+  min-height: 0;
+}
 .perm-tip { color: #e6a23c; font-size: 12px; margin-bottom: 12px; background: #fdf6ec; padding: 8px 12px; border-radius: 4px; }
 </style>

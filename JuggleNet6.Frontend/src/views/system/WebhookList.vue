@@ -7,7 +7,8 @@
     </div>
 
     <!-- 列表 -->
-    <el-table :data="webhooks" v-loading="loading" stripe border style="width:100%">
+    <div class="table-card">
+    <el-table :data="webhooks" v-loading="loading" stripe border height="100%">
       <el-table-column prop="webhookKey" label="Webhook Key" min-width="180">
         <template #default="{ row }">
           <code style="background:#f5f5f5;padding:2px 6px;border-radius:4px;font-size:12px">{{ row.webhookKey }}</code>
@@ -51,10 +52,11 @@
     </el-table>
 
     <!-- 分页 -->
-    <div style="margin-top:16px;display:flex;justify-content:flex-end;align-items:center;gap:12px">
+    <div class="pagination-bar">
       <el-pagination v-model:current-page="pageNum" v-model:page-size="pageSize"
         :total="total" :page-sizes="[10,20,50]" layout="total, sizes, prev, pager, next"
         @size-change="loadList" @current-change="loadList" />
+    </div>
     </div>
 
     <!-- 新建/编辑对话框 -->
@@ -223,7 +225,37 @@ function formatTime(t: string) {
 </script>
 
 <style scoped>
-.webhook-container { padding: 20px; }
-.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.webhook-container {
+  padding: 16px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  flex-shrink: 0;
+}
 .page-header h2 { margin: 0; font-size: 18px; }
+.table-card {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.table-card :deep(.el-table) {
+  flex: 1;
+  min-height: 0;
+}
+.pagination-bar {
+  flex-shrink: 0;
+  padding: 10px 0 2px;
+  display: flex;
+  justify-content: flex-end;
+}
 </style>

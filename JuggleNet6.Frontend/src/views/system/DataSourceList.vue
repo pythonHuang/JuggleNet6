@@ -4,8 +4,8 @@
       <h2>数据源管理</h2>
       <el-button type="primary" icon="Plus" @click="openAdd">新建数据源</el-button>
     </div>
-    <el-card>
-      <el-table :data="tableData" stripe v-loading="loading">
+    <el-card class="table-card">
+      <el-table :data="tableData" stripe v-loading="loading" height="100%">
         <el-table-column prop="dsName" label="名称" width="140" />
         <el-table-column prop="dsType" label="类型" width="110">
           <template #default="{ row }">
@@ -218,9 +218,40 @@ function dbTypeColor(type: string) {
 </script>
 
 <style scoped>
-.page-container { padding: 20px; }
-.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.page-container {
+  padding: 16px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  flex-shrink: 0;
+}
 .page-header h2 { font-size: 20px; color: #333; }
+.table-card {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.table-card :deep(.el-card__body) {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.table-card :deep(.el-table) {
+  flex: 1;
+  min-height: 0;
+}
 .form-tip { color: #888; font-size: 12px; background: #f5f5f5; padding: 8px 12px; border-radius: 6px; margin: -8px 0 12px; }
 .port-hint { font-size: 11px; color: #aaa; margin-left: 8px; }
 .conn-hint { font-size: 12px; color: #555; font-family: monospace; }
