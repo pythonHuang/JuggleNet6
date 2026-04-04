@@ -16,6 +16,14 @@ public class UserAddRequest
     public long? TenantId { get; set; }
 }
 
+public class UserUpdateRequest
+{
+    public long Id { get; set; }
+    public string UserName { get; set; } = "";
+    public long? RoleId { get; set; }
+    public long? TenantId { get; set; }
+}
+
 public class UserResetPwdRequest
 {
     public long Id { get; set; }
@@ -274,6 +282,7 @@ public class RoleAddRequest
     public string RoleName { get; set; } = "";
     public string? RoleCode { get; set; }
     public string? Remark { get; set; }
+    public long? TenantId { get; set; }
     public List<string> MenuKeys { get; set; } = new();
 }
 
@@ -283,6 +292,7 @@ public class RoleUpdateRequest
     public string RoleName { get; set; } = "";
     public string? RoleCode { get; set; }
     public string? Remark { get; set; }
+    public long? TenantId { get; set; }
     public List<string> MenuKeys { get; set; } = new();
 }
 
@@ -292,6 +302,12 @@ public class TenantAddRequest
     public string TenantName { get; set; } = "";
     public string? TenantCode { get; set; }
     public string? Remark { get; set; }
+    /// <summary>过期时间（null 表示永不过期）</summary>
+    public DateTime? ExpiredAt { get; set; }
+    /// <summary>租户菜单权限列表</summary>
+    public List<string> MenuKeys { get; set; } = new();
+    /// <summary>关联用户ID列表</summary>
+    public List<long> UserIds { get; set; } = new();
 }
 
 public class TenantUpdateRequest
@@ -301,5 +317,18 @@ public class TenantUpdateRequest
     public string? TenantCode { get; set; }
     public string? Remark { get; set; }
     public int Status { get; set; }
+    /// <summary>过期时间（null 表示永不过期）</summary>
+    public DateTime? ExpiredAt { get; set; }
+    /// <summary>租户菜单权限列表</summary>
+    public List<string> MenuKeys { get; set; } = new();
+    /// <summary>关联用户ID列表</summary>
+    public List<long> UserIds { get; set; } = new();
+}
+
+// AuditLog
+public class AuditLogPageRequest : PageRequest
+{
+    public string? Module { get; set; }
+    public string? ActionType { get; set; }
 }
 

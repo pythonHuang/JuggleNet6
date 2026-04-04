@@ -224,18 +224,14 @@ app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
 
-// 多租户中间件：从 JWT Claims 中提取 TenantId 注入 ITenantAccessor
+// 多租户中间件：从 JWT Claims 中提取用户信息注入 ITenantAccessor
 app.Use(async (ctx, next) =>
 {
     var tenantAccessor = ctx.RequestServices.GetRequiredService<ITenantAccessor>();
     // 开放接口（/open/）和健康检查不设置租户
     if (!ctx.Request.Path.StartsWithSegments("/open") && ctx.Request.Path != "/api/health")
     {
-        var tenantClaim = ctx.User.FindFirst("TenantId");
-        if (tenantClaim != null && long.TryParse(tenantClaim.Value, out var tid))
-        {
-            tenantAccessor.TenantId = tid;
-        }
+        tenantAccessor.LoadFromClaims(ctx.User);
     }
     await next();
 });

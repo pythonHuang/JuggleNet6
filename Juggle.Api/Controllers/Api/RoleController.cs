@@ -2,9 +2,11 @@ using Juggle.Domain.Entities;
 using Juggle.Infrastructure.Persistence;
 using Juggle.Application.Models.Request;
 using Juggle.Application.Models.Response;
+using Juggle.Application.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 
 namespace Juggle.Api.Controllers.Api;
 
@@ -13,14 +15,26 @@ namespace Juggle.Api.Controllers.Api;
 public class RoleController : ControllerBase
 {
     private readonly JuggleDbContext _db;
+    private readonly ITenantAccessor _tenant;
 
-    public RoleController(JuggleDbContext db) => _db = db;
+    public RoleController(JuggleDbContext db, ITenantAccessor tenant)
+    {
+        _db = db;
+        _tenant = tenant;
+    }
 
     /// <summary>角色分页列表</summary>
     [HttpPost("page"), Authorize]
     public async Task<ApiResult> Page([FromBody] PageRequest req)
     {
+        // 超级管理员看所有角色，其他人员只看本租户角色和全局角色(TenantId=null)
         var query = _db.Roles.Where(r => r.Deleted == 0);
+        if (!_tenant.IsSuperAdmin)
+        {
+            // 非超管：显示全局角色（null TenantId）+ 本租户角色
+            query = query.Where(r => r.TenantId == null || r.TenantId == _tenant.TenantId);
+        }
+
         if (!string.IsNullOrEmpty(req.Keyword))
             query = query.Where(r => r.RoleName!.Contains(req.Keyword) || (r.RoleCode != null && r.RoleCode.Contains(req.Keyword)));
 
@@ -28,32 +42,45 @@ public class RoleController : ControllerBase
         var records = await query.OrderByDescending(r => r.Id)
             .Skip((req.PageNum - 1) * req.PageSize)
             .Take(req.PageSize)
+            .Select(r => new
+            {
+                r.Id, r.RoleName, r.RoleCode, r.Remark, r.CreatedAt, r.UpdatedAt,
+                r.TenantId,
+                TenantName = _db.Tenants.Where(t => t.Id == r.TenantId && t.Deleted == 0).Select(t => t.TenantName).FirstOrDefault()!,
+                MenuCount = _db.RoleMenus.Count(rm => rm.RoleId == r.Id && rm.Deleted == 0)
+            })
             .ToListAsync();
 
-        // 查每个角色的菜单权限数
-        var roleIds = records.Select(r => r.Id).ToList();
-        var menuCounts = await _db.RoleMenus
-            .Where(rm => roleIds.Contains(rm.RoleId) && rm.Deleted == 0)
-            .GroupBy(rm => rm.RoleId)
-            .Select(g => new { RoleId = g.Key, Count = g.Count() })
-            .ToDictionaryAsync(x => x.RoleId, x => x.Count);
-
-        var result = records.Select(r => new
-        {
-            r.Id, r.RoleName, r.RoleCode, r.Remark, r.CreatedAt, r.UpdatedAt,
-            MenuCount = menuCounts.GetValueOrDefault(r.Id, 0)
-        });
-        return ApiResult.Success(new { total, records = result });
+        return ApiResult.Success(new { total, records });
     }
 
-    /// <summary>所有角色（下拉选择用）</summary>
+    /// <summary>角色下拉列表（根据权限过滤）</summary>
     [HttpGet("all"), Authorize]
     public async Task<ApiResult> All()
     {
+        var query = _db.Roles.Where(r => r.Deleted == 0);
+        if (!_tenant.IsSuperAdmin)
+            query = query.Where(r => r.TenantId == null || r.TenantId == _tenant.TenantId);
+
+        var list = await query.OrderBy(r => r.Id)
+            .Select(r => new { r.Id, r.RoleName, r.RoleCode, r.TenantId })
+            .ToListAsync();
+        return ApiResult.Success(list);
+    }
+
+    /// <summary>根据租户ID获取角色列表（用户编辑时使用）</summary>
+    [HttpGet("byTenant/{tenantId}"), Authorize]
+    public async Task<ApiResult> ByTenant(long tenantId)
+    {
+        // 超管可获取指定租户下所有角色
+        // 非超管只能获取本租户的角色
+        if (!_tenant.IsSuperAdmin && tenantId != _tenant.TenantId)
+            return ApiResult.Fail("无权访问该租户角色", 403);
+
         var list = await _db.Roles
-            .Where(r => r.Deleted == 0)
+            .Where(r => r.Deleted == 0 && (r.TenantId == tenantId || r.TenantId == null))
             .OrderBy(r => r.Id)
-            .Select(r => new { r.Id, r.RoleName, r.RoleCode })
+            .Select(r => new { r.Id, r.RoleName, r.RoleCode, r.TenantId })
             .ToListAsync();
         return ApiResult.Success(list);
     }
@@ -70,10 +97,24 @@ public class RoleController : ControllerBase
             .Select(rm => rm.MenuKey)
             .ToListAsync();
 
+        // 获取角色所属租户的最大菜单权限
+        List<string> tenantMenuKeys = new();
+        if (role.TenantId.HasValue)
+        {
+            var tenant = await _db.Tenants.FindAsync(role.TenantId.Value);
+            if (tenant != null)
+            {
+                try { tenantMenuKeys = JsonSerializer.Deserialize<List<string>>(tenant.MenuKeys ?? "[]") ?? new(); }
+                catch { tenantMenuKeys = new(); }
+            }
+        }
+
         return ApiResult.Success(new
         {
             role.Id, role.RoleName, role.RoleCode, role.Remark, role.CreatedAt,
-            MenuKeys = menuKeys
+            role.TenantId,
+            MenuKeys = menuKeys,
+            TenantMenuKeys = tenantMenuKeys // 角色可分配的最大权限边界
         });
     }
 
@@ -84,10 +125,38 @@ public class RoleController : ControllerBase
         if (string.IsNullOrWhiteSpace(req.RoleName))
             return ApiResult.Fail("角色名称不能为空");
 
+        // 非超管不能设置租户
+        if (!_tenant.IsSuperAdmin && req.TenantId != null)
+            return ApiResult.Fail("无权指定租户", 403);
+
+        // 非超管只能创建本租户角色或全局角色
+        if (!_tenant.IsSuperAdmin && req.TenantId != null && req.TenantId != _tenant.TenantId)
+            return ApiResult.Fail("只能创建本租户的角色", 403);
+
+        // 租户编码唯一性
         if (!string.IsNullOrWhiteSpace(req.RoleCode))
         {
             var exists = await _db.Roles.AnyAsync(r => r.RoleCode == req.RoleCode && r.Deleted == 0);
             if (exists) return ApiResult.Fail("角色编码已存在");
+        }
+
+        // 如果角色绑定租户，校验菜单权限不超出租户权限
+        if (req.TenantId.HasValue)
+        {
+            var tenant = await _db.Tenants.FindAsync(req.TenantId.Value);
+            if (tenant != null)
+            {
+                List<string> tenantMenuKeys;
+                try { tenantMenuKeys = JsonSerializer.Deserialize<List<string>>(tenant.MenuKeys ?? "[]") ?? new(); }
+                catch { tenantMenuKeys = new(); }
+
+                if (tenantMenuKeys.Count > 0)
+                {
+                    var overKeys = req.MenuKeys.Where(k => !tenantMenuKeys.Contains(k)).ToList();
+                    if (overKeys.Count > 0)
+                        return ApiResult.Fail($"角色权限超出租户权限范围：{string.Join(", ", overKeys)}");
+                }
+            }
         }
 
         var role = new RoleEntity
@@ -95,6 +164,7 @@ public class RoleController : ControllerBase
             RoleName  = req.RoleName,
             RoleCode  = req.RoleCode,
             Remark    = req.Remark,
+            TenantId  = req.TenantId,
             Deleted   = 0,
             CreatedAt = DateTime.Now.ToString("o")
         };
@@ -106,10 +176,7 @@ public class RoleController : ControllerBase
         {
             _db.RoleMenus.AddRange(req.MenuKeys.Select(key => new RoleMenuEntity
             {
-                RoleId    = role.Id,
-                MenuKey   = key,
-                Deleted   = 0,
-                CreatedAt = DateTime.Now.ToString("o")
+                RoleId = role.Id, MenuKey = key, Deleted = 0, CreatedAt = DateTime.Now.ToString("o")
             }));
             await _db.SaveChangesAsync();
         }
@@ -125,15 +192,41 @@ public class RoleController : ControllerBase
         if (role == null || role.Deleted == 1) return ApiResult.Fail("角色不存在");
         if (role.Id == 1) return ApiResult.Fail("不能修改超级管理员角色");
 
+        // 非超管不能修改租户
+        if (!_tenant.IsSuperAdmin && req.TenantId != role.TenantId)
+            return ApiResult.Fail("无权修改角色所属租户", 403);
+
+        // 非超管不能把角色移到其他租户
+        if (!_tenant.IsSuperAdmin && req.TenantId != null && req.TenantId != _tenant.TenantId)
+            return ApiResult.Fail("无权将角色移至其他租户", 403);
+
+        // 如果修改了租户，重新校验权限
+        if (req.TenantId.HasValue)
+        {
+            var tenant = await _db.Tenants.FindAsync(req.TenantId.Value);
+            if (tenant != null)
+            {
+                List<string> tenantMenuKeys;
+                try { tenantMenuKeys = JsonSerializer.Deserialize<List<string>>(tenant.MenuKeys ?? "[]") ?? new(); }
+                catch { tenantMenuKeys = new(); }
+
+                if (tenantMenuKeys.Count > 0)
+                {
+                    var overKeys = req.MenuKeys.Where(k => !tenantMenuKeys.Contains(k)).ToList();
+                    if (overKeys.Count > 0)
+                        return ApiResult.Fail($"角色权限超出租户权限范围：{string.Join(", ", overKeys)}");
+                }
+            }
+        }
+
         role.RoleName  = req.RoleName;
         role.RoleCode  = req.RoleCode;
         role.Remark    = req.Remark;
+        role.TenantId  = req.TenantId;
         role.UpdatedAt = DateTime.Now.ToString("o");
 
         // 先删除旧权限
-        var oldMenus = await _db.RoleMenus
-            .Where(rm => rm.RoleId == req.Id && rm.Deleted == 0)
-            .ToListAsync();
+        var oldMenus = await _db.RoleMenus.Where(rm => rm.RoleId == req.Id && rm.Deleted == 0).ToListAsync();
         foreach (var m in oldMenus) m.Deleted = 1;
         _db.RoleMenus.UpdateRange(oldMenus);
 
@@ -142,10 +235,7 @@ public class RoleController : ControllerBase
         {
             _db.RoleMenus.AddRange(req.MenuKeys.Select(key => new RoleMenuEntity
             {
-                RoleId    = req.Id,
-                MenuKey   = key,
-                Deleted   = 0,
-                CreatedAt = DateTime.Now.ToString("o")
+                RoleId = req.Id, MenuKey = key, Deleted = 0, CreatedAt = DateTime.Now.ToString("o")
             }));
         }
 
@@ -158,17 +248,20 @@ public class RoleController : ControllerBase
     public async Task<ApiResult> Delete(long id)
     {
         if (id == 1) return ApiResult.Fail("不能删除超级管理员角色");
+
         var role = await _db.Roles.FindAsync(id);
         if (role == null || role.Deleted == 1) return ApiResult.Fail("角色不存在");
 
-        // 检查是否有用户使用该角色
+        // 非超管只能删除本租户角色
+        if (!_tenant.IsSuperAdmin && role.TenantId != _tenant.TenantId && role.TenantId != null)
+            return ApiResult.Fail("无权删除该角色", 403);
+
         var hasUsers = await _db.Users.AnyAsync(u => u.RoleId == id && u.Deleted == 0);
         if (hasUsers) return ApiResult.Fail("该角色下还有用户，不能删除");
 
-        role.Deleted   = 1;
+        role.Deleted = 1;
         role.UpdatedAt = DateTime.Now.ToString("o");
 
-        // 同时删除角色菜单
         var menus = await _db.RoleMenus.Where(rm => rm.RoleId == id && rm.Deleted == 0).ToListAsync();
         foreach (var m in menus) m.Deleted = 1;
         _db.RoleMenus.UpdateRange(menus);

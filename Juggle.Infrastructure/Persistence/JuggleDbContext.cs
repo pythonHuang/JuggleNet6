@@ -29,6 +29,7 @@ public class JuggleDbContext : DbContext
     public DbSet<RoleEntity> Roles { get; set; } = null!;
     public DbSet<RoleMenuEntity> RoleMenus { get; set; } = null!;
     public DbSet<TenantEntity> Tenants { get; set; } = null!;
+    public DbSet<AuditLogEntity> AuditLogs { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -57,6 +58,7 @@ public class JuggleDbContext : DbContext
         modelBuilder.Entity<RoleEntity>().ToTable("t_role");
         modelBuilder.Entity<RoleMenuEntity>().ToTable("t_role_menu");
         modelBuilder.Entity<TenantEntity>().ToTable("t_tenant");
+        modelBuilder.Entity<AuditLogEntity>().ToTable("t_audit_log");
 
         // 列名映射（snake_case）
         modelBuilder.Entity<UserEntity>(e => {
@@ -373,12 +375,14 @@ public class JuggleDbContext : DbContext
         modelBuilder.Entity<TenantEntity>().HasData(new TenantEntity
         {
             Id = 1, TenantName = "默认租户", TenantCode = "default", Status = 1,
+            MenuKeys = "[]",
             Deleted = 0, CreatedAt = "2026-01-01T00:00:00"
         });
         modelBuilder.Entity<RoleEntity>().HasData(new RoleEntity
         {
             Id = 1, RoleName = "超级管理员", RoleCode = "admin",
-            Remark = "拥有所有权限", Deleted = 0, CreatedAt = "2026-01-01T00:00:00"
+            Remark = "拥有所有权限", TenantId = 1,
+            Deleted = 0, CreatedAt = "2026-01-01T00:00:00"
         });
         modelBuilder.Entity<UserEntity>().HasData(new UserEntity
         {
@@ -402,6 +406,7 @@ public class JuggleDbContext : DbContext
             e.Property(p => p.RoleName).HasColumnName("role_name");
             e.Property(p => p.RoleCode).HasColumnName("role_code");
             e.Property(p => p.Remark).HasColumnName("remark");
+            e.Property(p => p.TenantId).HasColumnName("tenant_id");
         });
         modelBuilder.Entity<RoleMenuEntity>(e => {
             e.Property(p => p.Id).HasColumnName("id");
@@ -424,6 +429,23 @@ public class JuggleDbContext : DbContext
             e.Property(p => p.TenantCode).HasColumnName("tenant_code");
             e.Property(p => p.Remark).HasColumnName("remark");
             e.Property(p => p.Status).HasColumnName("status");
+            e.Property(p => p.ExpiredAt).HasColumnName("expired_at");
+            e.Property(p => p.MenuKeys).HasColumnName("menu_keys").HasColumnType("text");
+        });
+        modelBuilder.Entity<AuditLogEntity>(e => {
+            e.Property(p => p.Id).HasColumnName("id");
+            e.Property(p => p.Deleted).HasColumnName("deleted");
+            e.Property(p => p.CreatedAt).HasColumnName("created_at");
+            e.Property(p => p.CreatedBy).HasColumnName("created_by");
+            e.Property(p => p.UpdatedAt).HasColumnName("updated_at");
+            e.Property(p => p.UpdatedBy).HasColumnName("updated_by");
+            e.Property(p => p.Module).HasColumnName("module");
+            e.Property(p => p.ActionType).HasColumnName("action_type");
+            e.Property(p => p.TargetId).HasColumnName("target_id");
+            e.Property(p => p.ChangeContent).HasColumnName("change_content").HasColumnType("text");
+            e.Property(p => p.OperatorName).HasColumnName("operator_name");
+            e.Property(p => p.OperatorId).HasColumnName("operator_id");
+            e.Property(p => p.OperatorTenantId).HasColumnName("operator_tenant_id");
         });
     }
 }
