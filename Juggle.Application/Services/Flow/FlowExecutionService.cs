@@ -202,7 +202,105 @@ public class FlowExecutionService
         if (result.Context != null)
             await FlushStaticVariablesAsync(result.Context);
 
+        // 全局告警：流程失败时检查告警配置并通知
+        if (!result.Success && triggerType != "debug")
+        {
+            try { await SendAlertAsync(definition, result, logId); } catch { /* 告警失败不影响主流程 */ }
+        }
+
         return result;
+    }
+
+    // ────────────────────────────────────────────────────────────────
+    // 全局告警
+    // ────────────────────────────────────────────────────────────────
+
+    private async Task SendAlertAsync(FlowDefinitionEntity definition, FlowResult result, long logId)
+    {
+        // 读取告警配置
+        var configKeys = new[] { "alert.enabled", "alert.webhook.url", "alert.webhook.secret",
+                                  "alert.email.to", "alert.on.fail.enabled" };
+        var configs = await _db.SystemConfigs
+            .Where(c => c.Deleted == 0 && configKeys.Contains(c.ConfigKey))
+            .ToListAsync();
+        var cfgMap = configs.ToDictionary(c => c.ConfigKey, c => c.ConfigValue ?? "");
+
+        if (!cfgMap.TryGetValue("alert.enabled", out var enabled) || enabled != "true") return;
+        if (!cfgMap.TryGetValue("alert.on.fail.enabled", out var failAlert) || failAlert != "true") return;
+
+        var webhookUrl = cfgMap.GetValueOrDefault("alert.webhook.url", "");
+        var emailTo    = cfgMap.GetValueOrDefault("alert.email.to", "");
+
+        var alertBody = new
+        {
+            eventType    = "FLOW_FAILED",
+            flowKey      = definition.FlowKey,
+            flowName     = definition.FlowName,
+            logId,
+            errorMessage = result.ErrorMessage,
+            time         = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
+        };
+
+        // Webhook 告警
+        if (!string.IsNullOrEmpty(webhookUrl))
+        {
+            try
+            {
+                var client  = _httpClientFactory.CreateClient();
+                var json    = System.Text.Json.JsonSerializer.Serialize(alertBody);
+                var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
+                await client.PostAsync(webhookUrl, content);
+            }
+            catch { /* webhook 发送失败不中断 */ }
+        }
+
+        // Email 告警（如果配置了 SMTP 和收件人）
+        if (!string.IsNullOrEmpty(emailTo))
+        {
+            try { await SendEmailAlertAsync(definition, result, logId, emailTo); } catch { }
+        }
+    }
+
+    private async Task SendEmailAlertAsync(FlowDefinitionEntity definition, FlowResult result, long logId, string emailTo)
+    {
+        var configKeys = new[] { "email.smtp.host", "email.smtp.port", "email.smtp.ssl",
+                                  "email.smtp.username", "email.smtp.password",
+                                  "email.from.address", "email.from.name" };
+        var configs = await _db.SystemConfigs
+            .Where(c => c.Deleted == 0 && configKeys.Contains(c.ConfigKey))
+            .ToListAsync();
+        var cfgMap = configs.ToDictionary(c => c.ConfigKey, c => c.ConfigValue ?? "");
+
+        var smtpHost = cfgMap.GetValueOrDefault("email.smtp.host", "");
+        if (string.IsNullOrEmpty(smtpHost)) return;
+
+        int.TryParse(cfgMap.GetValueOrDefault("email.smtp.port", "465"), out int smtpPort);
+        bool.TryParse(cfgMap.GetValueOrDefault("email.smtp.ssl", "true"), out bool useSsl);
+        var smtpUser = cfgMap.GetValueOrDefault("email.smtp.username", "");
+        var smtpPwd  = cfgMap.GetValueOrDefault("email.smtp.password", "");
+        var fromAddr = cfgMap.GetValueOrDefault("email.from.address", smtpUser);
+        var fromName = cfgMap.GetValueOrDefault("email.from.name", "Juggle告警");
+
+        // 使用 MailKit 发送（若不可用则跳过）
+        // 注：此处使用 System.Net.Mail 作为备用，实际项目可替换为 MailKit
+        using var client = new System.Net.Mail.SmtpClient(smtpHost, smtpPort)
+        {
+            EnableSsl           = useSsl,
+            Credentials         = new System.Net.NetworkCredential(smtpUser, smtpPwd),
+            DeliveryMethod      = System.Net.Mail.SmtpDeliveryMethod.Network,
+            UseDefaultCredentials = false
+        };
+        var subject = $"[Juggle告警] 流程执行失败: {definition.FlowName}";
+        var body    = $"流程Key: {definition.FlowKey}\n流程名: {definition.FlowName}\n" +
+                      $"LogId: {logId}\n错误信息: {result.ErrorMessage}\n时间: {DateTime.Now:yyyy-MM-dd HH:mm:ss}";
+        var msg = new System.Net.Mail.MailMessage(
+            new System.Net.Mail.MailAddress(fromAddr, fromName),
+            new System.Net.Mail.MailAddress(emailTo))
+        {
+            Subject = subject,
+            Body    = body
+        };
+        await client.SendMailAsync(msg);
     }
 
     // ────────────────────────────────────────────────────────────────
