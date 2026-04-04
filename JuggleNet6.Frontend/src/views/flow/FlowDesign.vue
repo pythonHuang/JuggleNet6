@@ -494,9 +494,13 @@
             </div>
             <div class="prop-item">
               <label>脚本内容</label>
-              <el-input v-model="selectedNode.codeConfig.script" type="textarea" :rows="10"
-                placeholder="// 示例：&#10;var name = $var.getVariableValue('input_name')&#10;$var.setVariableValue('output_result', 'Hello, ' + name)"
-                class="code-editor" />
+              <MonacoEditor
+                v-model="selectedNode.codeConfig.script"
+                language="javascript"
+                theme="vs-dark"
+                height="240px"
+                style="border-radius:4px;overflow:hidden"
+              />
             </div>
           </template>
 
@@ -519,8 +523,13 @@
             </div>
             <div class="prop-item">
               <label>SQL 语句</label>
-              <el-input v-model="selectedNode.mysqlConfig.sql" type="textarea" :rows="5"
-                placeholder="SELECT * FROM table WHERE id = ${input_id}" class="code-editor" />
+              <MonacoEditor
+                v-model="selectedNode.mysqlConfig.sql"
+                language="sql"
+                theme="vs-dark"
+                height="160px"
+                style="border-radius:4px;overflow:hidden"
+              />
             </div>
             <div class="prop-item" v-if="selectedNode.mysqlConfig.operationType === 'QUERY'">
               <label>查询结果写入</label>
@@ -876,6 +885,7 @@ import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import request from '../../utils/request'
+import MonacoEditor from '../../components/MonacoEditor.vue'
 
 // VueFlow
 import { VueFlow, Position } from '@vue-flow/core'
