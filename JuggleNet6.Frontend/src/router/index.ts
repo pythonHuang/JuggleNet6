@@ -22,10 +22,13 @@ const routes = [
       { path: 'system/token',      component: () => import('../views/system/TokenList.vue') },
       { path: 'system/datasource', component: () => import('../views/system/DataSourceList.vue') },
       { path: 'system/static-var', component: () => import('../views/system/StaticVariable.vue') },
-      { path: 'system/schedule',  component: () => import('../views/system/ScheduleTask.vue') },
-      { path: 'system/webhook',   component: () => import('../views/system/WebhookList.vue') },
+      { path: 'system/schedule',   component: () => import('../views/system/ScheduleTask.vue') },
+      { path: 'system/webhook',    component: () => import('../views/system/WebhookList.vue') },
+      { path: 'system/users',      component: () => import('../views/system/UserManage.vue') },
+      { path: 'system/config',     component: () => import('../views/system/SystemConfig.vue') },
       { path: 'flow/log',          component: () => import('../views/flow/FlowLog.vue') },
-      { path: 'flow/async-result', component: () => import('../views/flow/AsyncFlowResult.vue') }
+      { path: 'flow/async-result', component: () => import('../views/flow/AsyncFlowResult.vue') },
+      { path: 'flow/testcase',     component: () => import('../views/flow/FlowTestCase.vue') }
     ]
   },
   {

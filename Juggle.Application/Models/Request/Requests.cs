@@ -4,6 +4,49 @@ public class PageRequest
 {
     public int PageNum { get; set; } = 1;
     public int PageSize { get; set; } = 10;
+    public string? Keyword { get; set; }
+}
+
+// User Management
+public class UserAddRequest
+{
+    public string UserName { get; set; } = "";
+    public string Password { get; set; } = "";
+}
+
+public class UserResetPwdRequest
+{
+    public long Id { get; set; }
+    public string NewPassword { get; set; } = "";
+}
+
+public class UserChangePwdRequest
+{
+    public string OldPassword { get; set; } = "";
+    public string NewPassword { get; set; } = "";
+}
+
+// SystemConfig
+public class SystemConfigSaveRequest
+{
+    public string ConfigKey { get; set; } = "";
+    public string? ConfigValue { get; set; }
+}
+
+// FlowTestCase
+public class FlowTestCaseSaveRequest
+{
+    public long? Id { get; set; }
+    public string FlowKey { get; set; } = "";
+    public string CaseName { get; set; } = "";
+    public string? InputJson { get; set; }
+    public string? AssertJson { get; set; }
+    public string? Remark { get; set; }
+}
+
+public class FlowTestCasePageRequest : PageRequest
+{
+    public string? FlowKey { get; set; }
 }
 
 public class LoginRequest

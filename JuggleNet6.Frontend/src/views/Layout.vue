@@ -16,6 +16,7 @@
           <el-menu-item index="/flow/dashboard">监控仪表盘</el-menu-item>
           <el-menu-item index="/flow/list">流程列表</el-menu-item>
           <el-menu-item index="/flow/log">执行日志</el-menu-item>
+          <el-menu-item index="/flow/testcase">测试用例</el-menu-item>
           <el-menu-item index="/flow/async-result">异步结果查询</el-menu-item>
         </el-sub-menu>
         <el-sub-menu index="suite">
@@ -39,6 +40,8 @@
           <el-menu-item index="/system/static-var">静态变量</el-menu-item>
           <el-menu-item index="/system/schedule">定时任务</el-menu-item>
           <el-menu-item index="/system/webhook">Webhook 管理</el-menu-item>
+          <el-menu-item index="/system/users">用户管理</el-menu-item>
+          <el-menu-item index="/system/config">系统配置</el-menu-item>
         </el-sub-menu>
       </el-menu>
     </el-aside>
