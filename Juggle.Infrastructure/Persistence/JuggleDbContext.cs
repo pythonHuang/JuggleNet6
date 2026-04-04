@@ -30,6 +30,7 @@ public class JuggleDbContext : DbContext
     public DbSet<RoleMenuEntity> RoleMenus { get; set; } = null!;
     public DbSet<TenantEntity> Tenants { get; set; } = null!;
     public DbSet<AuditLogEntity> AuditLogs { get; set; } = null!;
+    public DbSet<LoginLogEntity> LoginLogs { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -59,6 +60,7 @@ public class JuggleDbContext : DbContext
         modelBuilder.Entity<RoleMenuEntity>().ToTable("t_role_menu");
         modelBuilder.Entity<TenantEntity>().ToTable("t_tenant");
         modelBuilder.Entity<AuditLogEntity>().ToTable("t_audit_log");
+        modelBuilder.Entity<LoginLogEntity>().ToTable("t_login_log");
 
         // 列名映射（snake_case）
         modelBuilder.Entity<UserEntity>(e => {
@@ -446,6 +448,21 @@ public class JuggleDbContext : DbContext
             e.Property(p => p.OperatorName).HasColumnName("operator_name");
             e.Property(p => p.OperatorId).HasColumnName("operator_id");
             e.Property(p => p.OperatorTenantId).HasColumnName("operator_tenant_id");
+        });
+        modelBuilder.Entity<LoginLogEntity>(e => {
+            e.Property(p => p.Id).HasColumnName("id");
+            e.Property(p => p.Deleted).HasColumnName("deleted");
+            e.Property(p => p.CreatedAt).HasColumnName("created_at");
+            e.Property(p => p.CreatedBy).HasColumnName("created_by");
+            e.Property(p => p.UpdatedAt).HasColumnName("updated_at");
+            e.Property(p => p.UpdatedBy).HasColumnName("updated_by");
+            e.Property(p => p.UserId).HasColumnName("user_id");
+            e.Property(p => p.UserName).HasColumnName("user_name");
+            e.Property(p => p.LoginType).HasColumnName("login_type");
+            e.Property(p => p.Result).HasColumnName("result");
+            e.Property(p => p.IpAddress).HasColumnName("ip_address");
+            e.Property(p => p.UserAgent).HasColumnName("user_agent").HasColumnType("text");
+            e.Property(p => p.TenantId).HasColumnName("tenant_id");
         });
     }
 }

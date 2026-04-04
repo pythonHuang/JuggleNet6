@@ -7,19 +7,6 @@
         <span class="flow-title">{{ flowInfo?.flowName }} - 流程设计器</span>
       </div>
       <div class="toolbar-center">
-        <el-button size="small" @click="addNode('START')" :disabled="hasStart" class="tb-btn-start">▶ 开始</el-button>
-        <el-button size="small" @click="addNode('METHOD')" class="tb-btn-method">⚙ 方法</el-button>
-        <el-button size="small" @click="addNode('SUB_FLOW')" class="tb-btn-subflow">⬡ 子流程</el-button>
-        <el-button size="small" @click="addNode('ASSIGN')" class="tb-btn-assign">← 赋值</el-button>
-        <el-button size="small" @click="addNode('CODE')" class="tb-btn-code">{ } 代码</el-button>
-        <el-button size="small" @click="addNode('MYSQL')" class="tb-btn-mysql">⊕ 数据库</el-button>
-        <el-button size="small" @click="addNode('CONDITION')" class="tb-btn-condition">◆ 条件</el-button>
-        <el-button size="small" @click="addNode('MERGE')" class="tb-btn-merge">⇒ 聚合</el-button>
-        <el-button size="small" @click="addNode('LOOP')" class="tb-btn-loop">↻ 循环</el-button>
-        <el-button size="small" @click="addNode('DELAY')" class="tb-btn-delay">⏱ 延迟</el-button>
-        <el-button size="small" @click="addNode('PARALLEL')" class="tb-btn-parallel">∥ 并行</el-button>
-        <el-button size="small" @click="addNode('NOTIFY')" class="tb-btn-notify">✉ 通知</el-button>
-        <el-button size="small" @click="addNode('END')" :disabled="hasEnd" class="tb-btn-end">⏹ 结束</el-button>
       </div>
       <div class="toolbar-right">
         <el-tooltip content="撤销 (Ctrl+Z)"><el-button size="small" icon="RefreshLeft" :disabled="undoStack.length === 0" @click="undo" /></el-tooltip>
@@ -34,6 +21,24 @@
     </div>
 
     <div class="designer-body">
+      <!-- 左侧节点工具面板 -->
+      <div class="node-panel">
+        <div class="node-panel-title">节点工具</div>
+        <div class="node-panel-body">
+          <div
+            v-for="node in nodeToolList"
+            :key="node.type"
+            class="node-tool-item"
+            :class="'nt-' + node.type.toLowerCase()"
+            :style="{ opacity: (node.type === 'START' && hasStart) || (node.type === 'END' && hasEnd) ? 0.4 : 1, pointerEvents: (node.type === 'START' && hasStart) || (node.type === 'END' && hasEnd) ? 'none' : 'auto' }"
+            @click="addNode(node.type)"
+          >
+            <span class="nt-icon">{{ node.icon }}</span>
+            <span class="nt-label">{{ node.label }}</span>
+          </div>
+        </div>
+      </div>
+
       <!-- 中间 VueFlow 画布 -->
       <div class="canvas-area" ref="canvasRef">
         <VueFlow
@@ -100,7 +105,7 @@
         <!-- 空状态提示 -->
         <div class="flow-hint" v-if="vfNodes.length === 0">
           <div style="font-size:48px;color:#ddd">⬡</div>
-          <p>从工具栏点击按钮添加节点，然后拖拽连接线建立流程</p>
+          <p>从左侧节点面板点击添加节点，然后拖拽连接线建立流程</p>
         </div>
 
         <!-- 删除提示（选中时显示） -->
@@ -1559,6 +1564,23 @@ function nodeTypeName(type: string) {
   return map[type] || type
 }
 
+// 左侧节点工具列表
+const nodeToolList = [
+  { type: 'START', icon: '▶', label: '开始' },
+  { type: 'END', icon: '⏹', label: '结束' },
+  { type: 'METHOD', icon: '⚙', label: '方法' },
+  { type: 'SUB_FLOW', icon: '⬡', label: '子流程' },
+  { type: 'ASSIGN', icon: '←', label: '赋值' },
+  { type: 'CODE', icon: '{ }', label: '代码' },
+  { type: 'MYSQL', icon: '⊕', label: '数据库' },
+  { type: 'CONDITION', icon: '◆', label: '条件' },
+  { type: 'MERGE', icon: '⇒', label: '聚合' },
+  { type: 'LOOP', icon: '↻', label: '循环' },
+  { type: 'DELAY', icon: '⏱', label: '延迟' },
+  { type: 'PARALLEL', icon: '∥', label: '并行' },
+  { type: 'NOTIFY', icon: '✉', label: '通知' },
+]
+
 function addNode(type: string) {
   takeSnapshot()
   const key = `${type.toLowerCase()}_${Date.now()}`
@@ -1875,6 +1897,71 @@ async function runDebug() {
 .tb-btn-notify    { background: #059669 !important; border-color: #059669 !important; color: #fff !important; }
 
 .designer-body { flex: 1; display: flex; overflow: hidden; }
+
+/* 左侧节点工具面板 */
+.node-panel {
+  width: 110px;
+  background: #001529;
+  border-right: 1px solid #0a2540;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+.node-panel-title {
+  color: rgba(255,255,255,0.65);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 10px 12px 6px;
+  text-align: center;
+  border-bottom: 1px solid #0a2540;
+  flex-shrink: 0;
+}
+.node-panel-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 6px;
+}
+.node-tool-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  margin-bottom: 3px;
+  transition: background 0.15s;
+  color: rgba(255,255,255,0.8);
+  font-size: 12px;
+}
+.node-tool-item:hover {
+  background: rgba(255,255,255,0.08);
+}
+.nt-icon {
+  font-size: 14px;
+  width: 20px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.nt-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* 节点工具项颜色指示条 */
+.nt-start     { border-left: 3px solid #52c41a; }
+.nt-end       { border-left: 3px solid #ff4d4f; }
+.nt-method    { border-left: 3px solid #1890ff; }
+.nt-sub_flow  { border-left: 3px solid #0891b2; }
+.nt-assign    { border-left: 3px solid #722ed1; }
+.nt-code      { border-left: 3px solid #eb2f96; }
+.nt-mysql     { border-left: 3px solid #13c2c2; }
+.nt-condition { border-left: 3px solid #fa8c16; }
+.nt-merge     { border-left: 3px solid #7c3aed; }
+.nt-loop      { border-left: 3px solid #8b5cf6; }
+.nt-delay     { border-left: 3px solid #64748b; }
+.nt-parallel  { border-left: 3px solid #e11d48; }
+.nt-notify    { border-left: 3px solid #059669; }
 
 /* 中间画布 */
 .canvas-area {

@@ -181,6 +181,16 @@ public class RoleController : ControllerBase
             await _db.SaveChangesAsync();
         }
 
+        _db.AuditLogs.Add(new AuditLogEntity
+        {
+            Module = "role", ActionType = "add", TargetId = role.Id,
+            ChangeContent = $"新增角色：{req.RoleName}",
+            OperatorName = _tenant.UserName, OperatorId = _tenant.UserId,
+            OperatorTenantId = _tenant.TenantId,
+            Deleted = 0, CreatedAt = DateTime.Now.ToString("o")
+        });
+        await _db.SaveChangesAsync();
+
         return ApiResult.Success(new { id = role.Id });
     }
 
@@ -240,6 +250,17 @@ public class RoleController : ControllerBase
         }
 
         await _db.SaveChangesAsync();
+
+        _db.AuditLogs.Add(new AuditLogEntity
+        {
+            Module = "role", ActionType = "update", TargetId = req.Id,
+            ChangeContent = $"更新角色：{req.RoleName}",
+            OperatorName = _tenant.UserName, OperatorId = _tenant.UserId,
+            OperatorTenantId = _tenant.TenantId,
+            Deleted = 0, CreatedAt = DateTime.Now.ToString("o")
+        });
+        await _db.SaveChangesAsync();
+
         return ApiResult.Success();
     }
 
@@ -267,6 +288,17 @@ public class RoleController : ControllerBase
         _db.RoleMenus.UpdateRange(menus);
 
         await _db.SaveChangesAsync();
+
+        _db.AuditLogs.Add(new AuditLogEntity
+        {
+            Module = "role", ActionType = "delete", TargetId = id,
+            ChangeContent = $"删除角色：{role.RoleName}",
+            OperatorName = _tenant.UserName, OperatorId = _tenant.UserId,
+            OperatorTenantId = _tenant.TenantId,
+            Deleted = 0, CreatedAt = DateTime.Now.ToString("o")
+        });
+        await _db.SaveChangesAsync();
+
         return ApiResult.Success();
     }
 }

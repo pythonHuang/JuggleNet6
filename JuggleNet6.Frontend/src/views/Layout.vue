@@ -44,6 +44,8 @@
           <el-menu-item index="/system/role" v-if="hasMenu('/system/role')">角色管理</el-menu-item>
           <el-menu-item index="/system/tenant" v-if="hasMenu('/system/tenant')">租户管理</el-menu-item>
           <el-menu-item index="/system/config" v-if="hasMenu('/system/config')">系统配置</el-menu-item>
+          <el-menu-item index="/system/login-log" v-if="hasMenu('/system/login-log')">登录日志</el-menu-item>
+          <el-menu-item index="/system/audit-log" v-if="hasMenu('/system/audit-log')">审计日志</el-menu-item>
         </el-sub-menu>
       </el-menu>
     </el-aside>

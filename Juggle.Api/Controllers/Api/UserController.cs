@@ -35,18 +35,60 @@ public class UserController : ControllerBase
             .FirstOrDefaultAsync(u => u.UserName == req.UserName
                                    && u.Password == pwdMd5
                                    && u.Deleted  == 0);
+
+        // 记录登录日志
+        var loginIp = HttpContext.Connection?.RemoteIpAddress?.ToString();
+        var loginUA = HttpContext.Request.Headers.UserAgent.ToString();
+
         if (user == null)
+        {
+            // 记录失败日志
+            _db.LoginLogs.Add(new LoginLogEntity
+            {
+                UserName = req.UserName, LoginType = "login", Result = "fail",
+                IpAddress = loginIp, UserAgent = loginUA,
+                Deleted = 0, CreatedAt = DateTime.Now.ToString("o")
+            });
+            await _db.SaveChangesAsync();
             return ApiResult.Fail("用户名或密码错误", 401);
+        }
 
         // 检查租户是否禁用或过期
         if (user.TenantId.HasValue)
         {
             var tenant = await _db.Tenants.FindAsync(user.TenantId.Value);
             if (tenant == null || tenant.Deleted == 1 || tenant.Status == 0)
+            {
+                _db.LoginLogs.Add(new LoginLogEntity
+                {
+                    UserId = user.Id, UserName = user.UserName, LoginType = "login", Result = "fail",
+                    IpAddress = loginIp, UserAgent = loginUA, TenantId = user.TenantId,
+                    Deleted = 0, CreatedAt = DateTime.Now.ToString("o")
+                });
+                await _db.SaveChangesAsync();
                 return ApiResult.Fail("租户已被禁用，无法登录", 403);
+            }
             if (tenant.ExpiredAt.HasValue && tenant.ExpiredAt.Value < DateTime.Now)
+            {
+                _db.LoginLogs.Add(new LoginLogEntity
+                {
+                    UserId = user.Id, UserName = user.UserName, LoginType = "login", Result = "fail",
+                    IpAddress = loginIp, UserAgent = loginUA, TenantId = user.TenantId,
+                    Deleted = 0, CreatedAt = DateTime.Now.ToString("o")
+                });
+                await _db.SaveChangesAsync();
                 return ApiResult.Fail("租户已过期，无法登录", 403);
+            }
         }
+
+        // 记录成功登录日志
+        _db.LoginLogs.Add(new LoginLogEntity
+        {
+            UserId = user.Id, UserName = user.UserName, LoginType = "login", Result = "success",
+            IpAddress = loginIp, UserAgent = loginUA, TenantId = user.TenantId,
+            Deleted = 0, CreatedAt = DateTime.Now.ToString("o")
+        });
+        await _db.SaveChangesAsync();
 
         var tokenStr = _jwtService.GenerateToken(user);
 
@@ -265,5 +307,31 @@ public class UserController : ControllerBase
         user.UpdatedAt = DateTime.Now.ToString("o");
         await _db.SaveChangesAsync();
         return ApiResult.Success();
+    }
+
+    /// <summary>登录日志分页列表</summary>
+    [HttpPost("login-log/page"), Authorize]
+    public async Task<ApiResult> LoginLogPage([FromBody] PageRequest req)
+    {
+        if (!_tenant.IsSuperAdmin)
+            return ApiResult.Fail("仅超级管理员可查看", 403);
+
+        var query = _db.LoginLogs.Where(l => l.Deleted == 0);
+        if (!string.IsNullOrEmpty(req.Keyword))
+            query = query.Where(l => (l.UserName != null && l.UserName.Contains(req.Keyword))
+                                     || (l.IpAddress != null && l.IpAddress.Contains(req.Keyword)));
+
+        var total = await query.CountAsync();
+        var records = await query.OrderByDescending(l => l.Id)
+            .Skip((req.PageNum - 1) * req.PageSize)
+            .Take(req.PageSize)
+            .Select(l => new
+            {
+                l.Id, l.UserId, l.UserName, l.LoginType, l.Result,
+                l.IpAddress, l.TenantId, l.CreatedAt
+            })
+            .ToListAsync();
+
+        return ApiResult.Success(new { total, records });
     }
 }
