@@ -58,11 +58,12 @@
           </template>
         </el-table-column>
         <el-table-column prop="createdAt" label="创建时间" width="180" show-overflow-tooltip />
-        <el-table-column label="操作" width="260" fixed="right">
+        <el-table-column label="操作" width="320" fixed="right">
           <template #default="{ row }">
             <el-button size="small" type="primary" link @click="goDesign(row)">设计</el-button>
             <el-button size="small" type="success" link @click="doDeploy(row)">部署</el-button>
             <el-button size="small" link @click="openEdit(row)">编辑</el-button>
+            <el-button size="small" type="info" link @click="doClone(row)">克隆</el-button>
             <el-button size="small" type="warning" link @click="doExport(row)">导出</el-button>
             <el-button size="small" type="danger" link @click="doDelete(row)">删除</el-button>
           </template>
@@ -173,6 +174,13 @@ async function handleSubmit() {
     ElMessage.success('创建成功')
   }
   dialogVisible.value = false
+  loadData()
+}
+
+async function doClone(row: any) {
+  await ElMessageBox.confirm(`确认克隆流程「${row.flowName}」为新草稿？`, '提示', { type: 'info' })
+  const res: any = await request.post(`/flow/definition/clone/${row.id}`, {})
+  ElMessage.success(`克隆成功：${res.data?.flowName || ''}`)
   loadData()
 }
 

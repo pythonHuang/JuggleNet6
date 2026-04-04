@@ -303,6 +303,76 @@ public class FlowDefinitionController : ControllerBase
         }
     }
 
+    /// <summary>克隆/复制流程定义（含变量、参数）</summary>
+    [HttpPost("clone/{id}")]
+    public async Task<ApiResult> Clone(long id)
+    {
+        var source = await _db.FlowDefinitions.FindAsync(id);
+        if (source == null || source.Deleted == 1) return ApiResult.Fail("流程不存在");
+
+        var newKey = $"flow_{Guid.NewGuid():N}";
+        var cloned = new FlowDefinitionEntity
+        {
+            FlowKey     = newKey,
+            FlowName    = $"{source.FlowName}_副本",
+            FlowDesc    = source.FlowDesc,
+            FlowType    = source.FlowType,
+            GroupName   = source.GroupName,
+            FlowContent = source.FlowContent,
+            Status      = 0,
+            CreatedAt   = DateTime.Now.ToString("o")
+        };
+        _db.FlowDefinitions.Add(cloned);
+        await _db.SaveChangesAsync();
+
+        // 复制变量
+        var vars = await _db.VariableInfos
+            .Where(v => v.FlowDefinitionId == id && v.Deleted == 0).ToListAsync();
+        foreach (var v in vars)
+        {
+            _db.VariableInfos.Add(new VariableInfoEntity
+            {
+                FlowDefinitionId = cloned.Id,
+                FlowKey          = newKey,
+                VariableCode     = v.VariableCode,
+                VariableName     = v.VariableName,
+                DataType         = v.DataType,
+                VariableType     = v.VariableType,
+                DefaultValue     = v.DefaultValue,
+                Description      = v.Description,
+                Deleted          = 0,
+                CreatedAt        = DateTime.Now.ToString("o")
+            });
+        }
+
+        // 复制参数（入参/出参）
+        var pars = await _db.Parameters
+            .Where(p => p.OwnerId == id && (p.ParamType == 5 || p.ParamType == 6) && p.Deleted == 0)
+            .ToListAsync();
+        foreach (var p in pars)
+        {
+            _db.Parameters.Add(new ParameterEntity
+            {
+                OwnerId      = cloned.Id,
+                OwnerCode    = newKey,
+                ParamType    = p.ParamType,
+                ParamCode    = p.ParamCode,
+                ParamName    = p.ParamName,
+                DataType     = p.DataType,
+                ObjectCode   = p.ObjectCode,
+                Required     = p.Required,
+                DefaultValue = p.DefaultValue,
+                Description  = p.Description,
+                SortNum      = p.SortNum,
+                Deleted      = 0,
+                CreatedAt    = DateTime.Now.ToString("o")
+            });
+        }
+
+        await _db.SaveChangesAsync();
+        return ApiResult.Success(new { id = cloned.Id, flowKey = newKey, flowName = cloned.FlowName });
+    }
+
     /// <summary>部署流程</summary>
     [HttpPost("deploy")]
     public async Task<ApiResult> Deploy([FromBody] FlowDeployRequest req)
