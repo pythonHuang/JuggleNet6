@@ -72,6 +72,17 @@ public class RoleController : ControllerBase
     [HttpGet("byTenant/{tenantId}"), Authorize]
     public async Task<ApiResult> ByTenant(long tenantId)
     {
+        // tenantId=0 时返回全局角色（无租户绑定）
+        if (tenantId == 0)
+        {
+            var globalList = await _db.Roles
+                .Where(r => r.Deleted == 0 && r.TenantId == null)
+                .OrderBy(r => r.Id)
+                .Select(r => new { r.Id, r.RoleName, r.RoleCode, r.TenantId })
+                .ToListAsync();
+            return ApiResult.Success(globalList);
+        }
+
         // 超管可获取指定租户下所有角色
         // 非超管只能获取本租户的角色
         if (!_tenant.IsSuperAdmin && tenantId != _tenant.TenantId)

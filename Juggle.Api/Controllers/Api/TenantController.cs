@@ -78,6 +78,18 @@ public class TenantController : ControllerBase
         return ApiResult.Success(list);
     }
 
+    /// <summary>所有启用租户（下拉选择用，兼容前端 /active 路由）</summary>
+    [HttpGet("active"), Authorize]
+    public async Task<ApiResult> Active()
+    {
+        var list = await _db.Tenants
+            .Where(t => t.Deleted == 0 && t.Status == 1)
+            .OrderBy(t => t.Id)
+            .Select(t => new { t.Id, t.TenantName, t.TenantCode })
+            .ToListAsync();
+        return ApiResult.Success(list);
+    }
+
     /// <summary>租户详情（含菜单权限和关联用户）</summary>
     [HttpGet("detail/{id}"), Authorize]
     public async Task<ApiResult> Detail(long id)
