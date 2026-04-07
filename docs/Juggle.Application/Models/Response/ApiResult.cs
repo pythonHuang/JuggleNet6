@@ -1,4 +1,4 @@
-namespace Juggle.Application.Models.Response;
+﻿namespace Juggle.Application.Models.Response;
 
 public class ApiResult<T>
 {
@@ -18,12 +18,4 @@ public class ApiResult
 
     public static ApiResult Success(object? data = null) => new() { Code = 200, Message = "success", Data = data };
     public static ApiResult Fail(string message, int code = 500) => new() { Code = code, Message = message };
-}
-
-public class PageResult<T>
-{
-    public long Total { get; set; }
-    public int PageNum { get; set; }
-    public int PageSize { get; set; }
-    public List<T> Records { get; set; } = new();
 }
