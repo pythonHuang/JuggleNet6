@@ -197,10 +197,14 @@ async function doSubmit() {
   if (!form.tenantName) { ElMessage.warning('请输入租户名称'); return }
   submitting.value = true
   try {
+    const payload: any = { ...form }
+    // 空字符串转为 null，避免 DateTime? 反序列化失败
+    if (!payload.expiredAt) payload.expiredAt = null
+
     if (isEdit.value) {
-      await request.put('/tenant/update', { id: editId.value, ...form })
+      await request.put('/tenant/update', { id: editId.value, ...payload })
     } else {
-      await request.post('/tenant/add', form)
+      await request.post('/tenant/add', payload)
     }
     ElMessage.success(isEdit.value ? '更新成功' : '新增成功')
     dlgVisible.value = false

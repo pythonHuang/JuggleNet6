@@ -27,13 +27,9 @@ public class RoleController : ControllerBase
     [HttpPost("page"), Authorize]
     public async Task<ApiResult> Page([FromBody] PageRequest req)
     {
-        // 超级管理员看所有角色，其他人员只看本租户角色和全局角色(TenantId=null)
-        var query = _db.Roles.Where(r => r.Deleted == 0);
-        if (!_tenant.IsSuperAdmin)
-        {
-            // 非超管：显示全局角色（null TenantId）+ 本租户角色
-            query = query.Where(r => r.TenantId == null || r.TenantId == _tenant.TenantId);
-        }
+        // 所有用户只看本租户角色和全局角色(TenantId=null)
+        var query = _db.Roles.Where(r => r.Deleted == 0)
+            .Where(r => r.TenantId == null || r.TenantId == _tenant.TenantId);
 
         if (!string.IsNullOrEmpty(req.Keyword))
             query = query.Where(r => r.RoleName!.Contains(req.Keyword) || (r.RoleCode != null && r.RoleCode.Contains(req.Keyword)));
