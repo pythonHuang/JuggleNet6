@@ -487,7 +487,6 @@ public class JuggleDbContext : DbContext
             e.Property(p => p.Result).HasColumnName("result");
             e.Property(p => p.IpAddress).HasColumnName("ip_address");
             e.Property(p => p.UserAgent).HasColumnName("user_agent").HasColumnType("text");
-            // TenantId 列名已由下面统一注册
         });
 
         // ── 统一补充 tenant_id 列名映射（BaseEntity 新增的字段，各实体配置 block 尚未覆盖的）──
@@ -516,7 +515,8 @@ public class JuggleDbContext : DbContext
         AddTenantIdCol<RoleMenuEntity>();
         AddTenantIdCol<TenantEntity>();
         AddTenantIdCol<AuditLogEntity>();
-        // UserEntity / RoleEntity / LoginLogEntity 已在各自 block 里配置，跳过
+        AddTenantIdCol<LoginLogEntity>();
+        // UserEntity / RoleEntity 已在各自 block 里配置 TenantId，跳过
 
         // ── 全局查询过滤器（租户隔离）────────────────────────────────────────
         // CurrentTenantId 属性动态读取当前 HTTP 请求的租户 ID：
