@@ -15,6 +15,7 @@ public class AuditLogEntity : BaseEntity
     public string? OperatorName { get; set; }
     /// <summary>操作人用户ID</summary>
     public long? OperatorId { get; set; }
-    /// <summary>操作人租户ID</summary>
+    /// <summary>操作人租户ID（等同于 TenantId，保留用于兼容旧查询）</summary>
     public long? OperatorTenantId { get; set; }
+    // TenantId 继承自 BaseEntity
 }

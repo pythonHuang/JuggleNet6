@@ -1,5 +1,6 @@
 using Juggle.Application.Models.Request;
 using Juggle.Application.Models.Response;
+using Juggle.Application.Services;
 using Juggle.Application.Services.Impl;
 using Juggle.Domain.Entities;
 using Juggle.Infrastructure.Persistence;
@@ -16,11 +17,13 @@ public class DataSourceController : ControllerBase
 {
     private readonly JuggleDbContext _db;
     private readonly DataSourceService _dsService;
+    private readonly ITenantAccessor _tenant;
 
-    public DataSourceController(JuggleDbContext db, DataSourceService dsService)
+    public DataSourceController(JuggleDbContext db, DataSourceService dsService, ITenantAccessor tenant)
     {
         _db        = db;
         _dsService = dsService;
+        _tenant    = tenant;
     }
 
     [HttpPost("add")]
@@ -35,6 +38,7 @@ public class DataSourceController : ControllerBase
             DbName    = req.DbName,
             Username  = req.Username,
             Password  = req.Password,
+            TenantId  = _tenant.TenantId,
             CreatedAt = DateTime.Now.ToString("o")
         };
         _db.DataSources.Add(entity);

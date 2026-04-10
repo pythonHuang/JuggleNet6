@@ -3,9 +3,34 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Juggle.Infrastructure.Persistence;
 
+/// <summary>
+/// Infrastructure 层用于获取当前租户 ID 的轻量接口（避免依赖 Web 层）。
+/// 在 Juggle.Api 的 Program.cs 中注册具体实现。
+/// </summary>
+public interface ICurrentTenantProvider
+{
+    /// <summary>
+    /// 获取当前请求的租户ID。
+    /// null = 超管/匿名/后台任务，此时 DbContext 不加租户过滤。
+    /// </summary>
+    long? GetCurrentTenantId();
+}
+
 public class JuggleDbContext : DbContext
 {
+    private readonly ICurrentTenantProvider? _tenantProvider;
+
     public JuggleDbContext(DbContextOptions<JuggleDbContext> options) : base(options) { }
+
+    /// <summary>带租户上下文的构造函数（由 DI 自动选择参数最多的）</summary>
+    public JuggleDbContext(DbContextOptions<JuggleDbContext> options, ICurrentTenantProvider tenantProvider)
+        : base(options)
+    {
+        _tenantProvider = tenantProvider;
+    }
+
+    /// <summary>当前请求的租户ID（由 ICurrentTenantProvider 动态提供）</summary>
+    private long? CurrentTenantId => _tenantProvider?.GetCurrentTenantId();
 
     public DbSet<UserEntity> Users { get; set; } = null!;
     public DbSet<SuiteEntity> Suites { get; set; } = null!;
@@ -462,7 +487,62 @@ public class JuggleDbContext : DbContext
             e.Property(p => p.Result).HasColumnName("result");
             e.Property(p => p.IpAddress).HasColumnName("ip_address");
             e.Property(p => p.UserAgent).HasColumnName("user_agent").HasColumnType("text");
-            e.Property(p => p.TenantId).HasColumnName("tenant_id");
+            // TenantId 列名已由下面统一注册
         });
+
+        // ── 统一补充 tenant_id 列名映射（BaseEntity 新增的字段，各实体配置 block 尚未覆盖的）──
+        // 以下实体的 block 中未显式配置 TenantId 列名，统一补上
+        void AddTenantIdCol<T>() where T : BaseEntity
+            => modelBuilder.Entity<T>().Property(p => p.TenantId).HasColumnName("tenant_id");
+
+        AddTenantIdCol<FlowDefinitionEntity>();
+        AddTenantIdCol<FlowInfoEntity>();
+        AddTenantIdCol<FlowVersionEntity>();
+        AddTenantIdCol<FlowLogEntity>();
+        AddTenantIdCol<FlowNodeLogEntity>();
+        AddTenantIdCol<FlowTestCaseEntity>();
+        AddTenantIdCol<DataSourceEntity>();
+        AddTenantIdCol<StaticVariableEntity>();
+        AddTenantIdCol<ScheduleTaskEntity>();
+        AddTenantIdCol<WebhookEntity>();
+        AddTenantIdCol<TokenEntity>();
+        AddTenantIdCol<TokenPermissionEntity>();
+        AddTenantIdCol<SuiteEntity>();
+        AddTenantIdCol<ApiEntity>();
+        AddTenantIdCol<ParameterEntity>();
+        AddTenantIdCol<ObjectEntity>();
+        AddTenantIdCol<VariableInfoEntity>();
+        AddTenantIdCol<SystemConfigEntity>();
+        AddTenantIdCol<RoleMenuEntity>();
+        AddTenantIdCol<TenantEntity>();
+        AddTenantIdCol<AuditLogEntity>();
+        // UserEntity / RoleEntity / LoginLogEntity 已在各自 block 里配置，跳过
+
+        // ── 全局查询过滤器（租户隔离）────────────────────────────────────────
+        // CurrentTenantId 属性动态读取当前 HTTP 请求的租户 ID：
+        //   null → 超管 / 匿名 / 后台任务，不过滤
+        //   有值 → 只看本租户数据（严格隔离）或本租户+全局（宽松隔离）
+
+        // 严格隔离：只有本租户的数据才可见（TenantId == current，null 行不可见）
+        modelBuilder.Entity<FlowDefinitionEntity>().HasQueryFilter(e => CurrentTenantId == null || e.TenantId == CurrentTenantId);
+        modelBuilder.Entity<FlowInfoEntity>().HasQueryFilter(e => CurrentTenantId == null || e.TenantId == CurrentTenantId);
+        modelBuilder.Entity<FlowVersionEntity>().HasQueryFilter(e => CurrentTenantId == null || e.TenantId == CurrentTenantId);
+        modelBuilder.Entity<FlowLogEntity>().HasQueryFilter(e => CurrentTenantId == null || e.TenantId == CurrentTenantId);
+        modelBuilder.Entity<FlowNodeLogEntity>().HasQueryFilter(e => CurrentTenantId == null || e.TenantId == CurrentTenantId);
+        modelBuilder.Entity<FlowTestCaseEntity>().HasQueryFilter(e => CurrentTenantId == null || e.TenantId == CurrentTenantId);
+        modelBuilder.Entity<DataSourceEntity>().HasQueryFilter(e => CurrentTenantId == null || e.TenantId == CurrentTenantId);
+        modelBuilder.Entity<StaticVariableEntity>().HasQueryFilter(e => CurrentTenantId == null || e.TenantId == CurrentTenantId);
+        modelBuilder.Entity<ScheduleTaskEntity>().HasQueryFilter(e => CurrentTenantId == null || e.TenantId == CurrentTenantId);
+        modelBuilder.Entity<WebhookEntity>().HasQueryFilter(e => CurrentTenantId == null || e.TenantId == CurrentTenantId);
+        modelBuilder.Entity<TokenEntity>().HasQueryFilter(e => CurrentTenantId == null || e.TenantId == CurrentTenantId);
+        modelBuilder.Entity<TokenPermissionEntity>().HasQueryFilter(e => CurrentTenantId == null || e.TenantId == CurrentTenantId);
+        modelBuilder.Entity<ObjectEntity>().HasQueryFilter(e => CurrentTenantId == null || e.TenantId == CurrentTenantId);
+        modelBuilder.Entity<VariableInfoEntity>().HasQueryFilter(e => CurrentTenantId == null || e.TenantId == CurrentTenantId);
+
+        // 宽松隔离：TenantId=null 的全局数据（官方套件、全局角色）对所有租户可见
+        modelBuilder.Entity<RoleEntity>().HasQueryFilter(e => CurrentTenantId == null || e.TenantId == null || e.TenantId == CurrentTenantId);
+        modelBuilder.Entity<SuiteEntity>().HasQueryFilter(e => CurrentTenantId == null || e.TenantId == null || e.TenantId == CurrentTenantId);
+        modelBuilder.Entity<ApiEntity>().HasQueryFilter(e => CurrentTenantId == null || e.TenantId == null || e.TenantId == CurrentTenantId);
+        modelBuilder.Entity<ParameterEntity>().HasQueryFilter(e => CurrentTenantId == null || e.TenantId == null || e.TenantId == CurrentTenantId);
     }
 }

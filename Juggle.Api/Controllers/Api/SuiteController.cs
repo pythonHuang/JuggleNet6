@@ -2,6 +2,7 @@ using Juggle.Domain.Entities;
 using Juggle.Infrastructure.Persistence;
 using Juggle.Application.Models.Request;
 using Juggle.Application.Models.Response;
+using Juggle.Application.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -14,8 +15,13 @@ namespace Juggle.Api.Controllers.Api;
 public class SuiteController : ControllerBase
 {
     private readonly JuggleDbContext _db;
+    private readonly ITenantAccessor _tenant;
 
-    public SuiteController(JuggleDbContext db) => _db = db;
+    public SuiteController(JuggleDbContext db, ITenantAccessor tenant)
+    {
+        _db = db;
+        _tenant = tenant;
+    }
 
     [HttpPost("add")]
     public async Task<ApiResult> Add([FromBody] SuiteAddRequest req)
@@ -29,6 +35,7 @@ public class SuiteController : ControllerBase
             SuiteImage   = req.SuiteImage,
             SuiteVersion = req.SuiteVersion,
             SuiteFlag    = 0,
+            TenantId     = _tenant.TenantId,
             CreatedAt    = DateTime.Now.ToString("o")
         };
         _db.Suites.Add(entity);
@@ -161,6 +168,7 @@ public class SuiteController : ControllerBase
                 SuiteVersion = suiteVersion,
                 SuiteImage   = suiteImage,
                 SuiteFlag    = 0,
+                TenantId     = _tenant.TenantId,
                 CreatedAt    = DateTime.Now.ToString("o")
             };
             _db.Suites.Add(entity);

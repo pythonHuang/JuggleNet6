@@ -1,6 +1,8 @@
 using Juggle.Application.Models.Response;
+using Juggle.Application.Services;
 using Juggle.Domain.Entities;
 using Juggle.Infrastructure.Persistence;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -9,13 +11,16 @@ namespace Juggle.Api.Controllers.Api;
 /// <summary>Webhook 管理接口</summary>
 [ApiController]
 [Route("api/system/webhook")]
+[Authorize]
 public class WebhookController : ControllerBase
 {
     private readonly JuggleDbContext _db;
+    private readonly ITenantAccessor _tenant;
 
-    public WebhookController(JuggleDbContext db)
+    public WebhookController(JuggleDbContext db, ITenantAccessor tenant)
     {
         _db = db;
+        _tenant = tenant;
     }
 
     /// <summary>分页查询 Webhook 列表</summary>
@@ -75,6 +80,7 @@ public class WebhookController : ControllerBase
         var def = await _db.FlowDefinitions.FirstOrDefaultAsync(d => d.FlowKey == webhook.FlowKey && d.Deleted == 0);
         if (def != null) webhook.FlowName = def.FlowName;
 
+        webhook.TenantId = _tenant.TenantId;
         webhook.CreatedAt = DateTime.Now.ToString("o");
         webhook.TriggerCount = 0;
         _db.Webhooks.Add(webhook);

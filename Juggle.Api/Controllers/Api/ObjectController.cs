@@ -2,6 +2,7 @@ using Juggle.Domain.Entities;
 using Juggle.Infrastructure.Persistence;
 using Juggle.Application.Models.Request;
 using Juggle.Application.Models.Response;
+using Juggle.Application.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -14,8 +15,13 @@ namespace Juggle.Api.Controllers.Api;
 public class ObjectController : ControllerBase
 {
     private readonly JuggleDbContext _db;
+    private readonly ITenantAccessor _tenant;
 
-    public ObjectController(JuggleDbContext db) => _db = db;
+    public ObjectController(JuggleDbContext db, ITenantAccessor tenant)
+    {
+        _db = db;
+        _tenant = tenant;
+    }
 
     [HttpPost("add")]
     public async Task<ApiResult> Add([FromBody] ObjectAddRequest req)
@@ -26,6 +32,7 @@ public class ObjectController : ControllerBase
             ObjectCode = code,
             ObjectName = req.ObjectName,
             ObjectDesc = req.ObjectDesc,
+            TenantId   = _tenant.TenantId,
             CreatedAt  = DateTime.Now.ToString("o")
         };
         _db.Objects.Add(entity);

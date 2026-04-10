@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Juggle.Application.Models.Request;
 using Juggle.Application.Models.Response;
+using Juggle.Application.Services;
 using Juggle.Application.Services.Flow;
 using Juggle.Domain.Entities;
 using Juggle.Infrastructure.Persistence;
@@ -17,11 +18,13 @@ public class FlowDefinitionController : ControllerBase
 {
     private readonly JuggleDbContext _db;
     private readonly FlowExecutionService _flowExec;
+    private readonly ITenantAccessor _tenant;
 
-    public FlowDefinitionController(JuggleDbContext db, FlowExecutionService flowExec)
+    public FlowDefinitionController(JuggleDbContext db, FlowExecutionService flowExec, ITenantAccessor tenant)
     {
         _db       = db;
         _flowExec = flowExec;
+        _tenant   = tenant;
     }
 
     [HttpPost("add")]
@@ -37,6 +40,7 @@ public class FlowDefinitionController : ControllerBase
             GroupName   = req.GroupName,
             FlowContent = "[]",
             Status      = 0,
+            TenantId    = _tenant.TenantId,
             CreatedAt   = DateTime.Now.ToString("o")
         };
         _db.FlowDefinitions.Add(entity);
@@ -258,6 +262,7 @@ public class FlowDefinitionController : ControllerBase
                 FlowType    = flowType,
                 FlowContent = flowContent,
                 Status      = 0,
+                TenantId    = _tenant.TenantId,
                 CreatedAt   = DateTime.Now.ToString("o")
             };
             _db.FlowDefinitions.Add(entity);
@@ -320,6 +325,7 @@ public class FlowDefinitionController : ControllerBase
             GroupName   = source.GroupName,
             FlowContent = source.FlowContent,
             Status      = 0,
+            TenantId    = _tenant.TenantId,
             CreatedAt   = DateTime.Now.ToString("o")
         };
         _db.FlowDefinitions.Add(cloned);
@@ -394,6 +400,7 @@ public class FlowDefinitionController : ControllerBase
                 FlowDesc  = definition.FlowDesc,
                 FlowType  = definition.FlowType,
                 Status    = 1,
+                TenantId  = _tenant.TenantId,
                 CreatedAt = DateTime.Now.ToString("o")
             };
             _db.FlowInfos.Add(flowInfo);
@@ -419,6 +426,7 @@ public class FlowDefinitionController : ControllerBase
             Version     = newVersion,
             FlowContent = definition.FlowContent,
             Status      = 1,
+            TenantId    = _tenant.TenantId,
             CreatedAt   = DateTime.Now.ToString("o")
         };
         _db.FlowVersions.Add(flowVersion);

@@ -1,6 +1,7 @@
 using Juggle.Application.Models.Request;
 using Juggle.Application.Models.Response;
 using Juggle.Api.Services;
+using Juggle.Application.Services;
 using Juggle.Domain.Entities;
 using Juggle.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authorization;
@@ -15,10 +16,12 @@ namespace Juggle.Api.Controllers.Api;
 public class ScheduleTaskController : ControllerBase
 {
     private readonly JuggleDbContext _db;
+    private readonly ITenantAccessor _tenant;
 
-    public ScheduleTaskController(JuggleDbContext db)
+    public ScheduleTaskController(JuggleDbContext db, ITenantAccessor tenant)
     {
         _db = db;
+        _tenant = tenant;
     }
 
     [HttpPost("add")]
@@ -36,6 +39,7 @@ public class ScheduleTaskController : ControllerBase
             CronExpression = req.CronExpression,
             InputJson      = req.InputJson,
             Status         = 1,
+            TenantId       = _tenant.TenantId,
             NextRunTime    = ScheduleTaskService.CalculateNextRun(req.CronExpression, DateTime.Now),
             CreatedAt      = DateTime.Now.ToString("o")
         };

@@ -2,6 +2,7 @@ using Juggle.Domain.Entities;
 using Juggle.Infrastructure.Persistence;
 using Juggle.Application.Models.Request;
 using Juggle.Application.Models.Response;
+using Juggle.Application.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -15,7 +16,12 @@ namespace Juggle.Api.Controllers.Api;
 public class StaticVariableController : ControllerBase
 {
     private readonly JuggleDbContext _db;
-    public StaticVariableController(JuggleDbContext db) => _db = db;
+    private readonly ITenantAccessor _tenant;
+    public StaticVariableController(JuggleDbContext db, ITenantAccessor tenant)
+    {
+        _db = db;
+        _tenant = tenant;
+    }
 
     [HttpGet("list")]
     public async Task<ApiResult> List([FromQuery] string? groupName)
@@ -42,6 +48,7 @@ public class StaticVariableController : ControllerBase
             DefaultValue = req.DefaultValue,
             Description  = req.Description,
             GroupName    = req.GroupName,
+            TenantId     = _tenant.TenantId,
             CreatedAt    = DateTime.Now.ToString("o")
         };
         _db.StaticVariables.Add(entity);

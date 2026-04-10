@@ -15,6 +15,5 @@ public class LoginLogEntity : BaseEntity
     public string? IpAddress { get; set; }
     /// <summary>User-Agent</summary>
     public string? UserAgent { get; set; }
-    /// <summary>租户ID</summary>
-    public long? TenantId { get; set; }
+    // TenantId 继承自 BaseEntity
 }

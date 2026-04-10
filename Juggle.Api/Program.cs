@@ -93,7 +93,21 @@ static string MaskPassword(string connStr)
     );
 }
 
-builder.Services.AddDbContext<JuggleDbContext>(ConfigureDbContext);
+// 注册 IHttpContextAccessor（DbContext 内部读取当前 HTTP 请求的租户信息）
+builder.Services.AddHttpContextAccessor();
+
+// 注册 ICurrentTenantProvider：从 JWT Claims 动态获取当前租户 ID
+builder.Services.AddScoped<Juggle.Infrastructure.Persistence.ICurrentTenantProvider,
+    Juggle.Api.Services.HttpContextTenantProvider>();
+
+// 注册 DbContext：EF Core DI 会自动注入 ICurrentTenantProvider（因为它已注册为 Scoped）
+builder.Services.AddDbContext<JuggleDbContext>((sp, opts) =>
+{
+    ConfigureDbContext(opts);
+});
+// 说明：JuggleDbContext 有两个构造函数：
+//   (DbContextOptions)              → 用于 EnsureCreated / 测试
+//   (DbContextOptions, ICurrentTenantProvider) → 用于 HTTP 请求（EF Core DI 自动选择参数最多的）
 
 // 如果不是 SQLite，则需要在启动时确保数据库已迁移
 // SQLite 使用 EnsureCreated，其他数据库使用 Migrate 或 EnsureCreated

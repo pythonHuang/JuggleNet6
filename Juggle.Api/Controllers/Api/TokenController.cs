@@ -2,6 +2,7 @@ using Juggle.Domain.Entities;
 using Juggle.Infrastructure.Persistence;
 using Juggle.Application.Models.Request;
 using Juggle.Application.Models.Response;
+using Juggle.Application.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -14,8 +15,13 @@ namespace Juggle.Api.Controllers.Api;
 public class TokenController : ControllerBase
 {
     private readonly JuggleDbContext _db;
+    private readonly ITenantAccessor _tenant;
 
-    public TokenController(JuggleDbContext db) => _db = db;
+    public TokenController(JuggleDbContext db, ITenantAccessor tenant)
+    {
+        _db = db;
+        _tenant = tenant;
+    }
 
     [HttpPost("add")]
     public async Task<ApiResult> Add([FromBody] TokenAddRequest req)
@@ -27,6 +33,7 @@ public class TokenController : ControllerBase
             TokenName  = req.TokenName,
             ExpiredAt  = req.ExpiredAt,
             Status     = 1,
+            TenantId   = _tenant.TenantId,
             CreatedAt  = DateTime.Now.ToString("o")
         };
         _db.Tokens.Add(entity);
@@ -96,6 +103,7 @@ public class TokenController : ControllerBase
                 PermissionType = perm.PermissionType,
                 ResourceKey    = perm.ResourceKey,
                 ResourceName   = perm.ResourceName,
+                TenantId       = _tenant.TenantId,
                 CreatedAt      = DateTime.Now.ToString("o")
             });
         }

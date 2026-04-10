@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Juggle.Application.Services;
 using Juggle.Domain.Engine;
 using Juggle.Domain.Engine.NodeExecutors;
 using Juggle.Domain.Entities;
@@ -15,11 +16,13 @@ public class FlowExecutionService
 {
     private readonly JuggleDbContext _db;
     private readonly IHttpClientFactory _httpClientFactory;
+    private readonly ITenantAccessor? _tenant;
 
-    public FlowExecutionService(JuggleDbContext db, IHttpClientFactory httpClientFactory)
+    public FlowExecutionService(JuggleDbContext db, IHttpClientFactory httpClientFactory, ITenantAccessor? tenant = null)
     {
         _db = db;
         _httpClientFactory = httpClientFactory;
+        _tenant = tenant;
     }
 
     // ────────────────────────────────────────────────────────────────
@@ -123,6 +126,7 @@ public class FlowExecutionService
             ErrorMessage = result.ErrorMessage,
             InputJson    = inputJson,
             OutputJson   = JsonSerializer.Serialize(result.OutputData),
+            TenantId     = _tenant?.TenantId ?? definition.TenantId,
             CreatedAt    = startTime.ToString("o")
         };
         _db.FlowLogs.Add(log);
@@ -146,6 +150,7 @@ public class FlowExecutionService
                 OutputSnapshot = nl.OutputSnapshot,
                 Detail         = nl.Detail,
                 ErrorMessage   = nl.ErrorMessage,
+                TenantId       = log.TenantId,
                 CreatedAt      = nl.StartTime.ToString("o")
             }).ToList();
             _db.FlowNodeLogs.AddRange(nodeLogs);
@@ -327,6 +332,7 @@ public class FlowExecutionService
             Status      = "RUNNING",
             StartTime   = DateTime.Now.ToString("o"),
             InputJson   = JsonSerializer.Serialize(inputParams),
+            TenantId    = _tenant?.TenantId ?? definition.TenantId,
             CreatedAt   = DateTime.Now.ToString("o")
         };
         _db.FlowLogs.Add(log);
@@ -398,6 +404,7 @@ public class FlowExecutionService
                     OutputSnapshot = nl.OutputSnapshot,
                     Detail         = nl.Detail,
                     ErrorMessage   = nl.ErrorMessage,
+                    TenantId       = log.TenantId,
                     CreatedAt      = nl.StartTime.ToString("o")
                 }).ToList();
                 _db.FlowNodeLogs.AddRange(nodeLogs);
