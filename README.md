@@ -1,215 +1,251 @@
-# Juggle 接口编排平台 (.NET 8 + Vue3)
+<div align="center">
 
-> 图形化微服务接口编排低代码工具 —— 像积木一样灵活，像魔法一样强大
+# 🎪 Juggle 接口编排平台
 
----
+<p>
+  <a href="https://github.com/pythonHuang/JuggleNet6/releases"><img src="https://img.shields.io/github/v/release/pythonHuang/JuggleNet6?style=flat-square" alt="Release"></a>
+  <a href="https://github.com/pythonHuang/JuggleNet6/blob/main/LICENSE"><img src="https://img.shields.io/github/license/pythonHuang/JuggleNet6?style=flat-square" alt="License"></a>
+  <a href="https://dotnet.microsoft.com/download/dotnet/8.0"><img src="https://img.shields.io/badge/.NET-8.0-512BD4?style=flat-square&logo=dotnet" alt=".NET 8"></a>
+  <a href="https://vuejs.org/"><img src="https://img.shields.io/badge/Vue-3.0-4FC08D?style=flat-square&logo=vue.js" alt="Vue 3"></a>
+</p>
 
-## 项目简介
+**中文** | [English](#english)
 
-**Juggle** 是一个可视化的接口编排平台，通过拖拽式流程设计器将多个已有的 HTTP API 接口编排为一个复合接口，直接供前端或业务系统调用，极大提升开发效率，无需重复编码。
-
-本项目为 Java/Spring Boot 原版的 **.NET 8 + SQLite + Vue3 重构版**，实现了完整的 DDD 四层架构。
-
----
-
-## 核心功能
-
-| 功能模块 | 说明 |
-|---------|------|
-| 🎨 可视化流程设计器 | 拖拽节点、连线建立数据流、自动布局（拓扑排序）、MiniMap 缩略图 |
-| 🔧 多种节点类型 | START / END / METHOD / CONDITION / ASSIGN / CODE / MYSQL / MERGE / **SUB_FLOW** |
-| ▶️ 流程调试 | 在设计界面直接调试，节点高亮显示（成功绿/失败红）、查看输出结果和节点日志 |
-| 📦 套件 & 接口管理 | 组织管理基础 HTTP API，支持导入/导出 JSON 分享移植 |
-| 🗄️ 多数据库支持 | SQLite / MySQL / PostgreSQL / SQL Server |
-| 📊 执行日志 | 流程执行主日志 + 节点明细日志（含变量快照时间轴） |
-| 🔑 Token 管理 | 开放接口访问令牌管理 |
-| 📐 全局静态变量 | 跨流程共享变量，支持读写与重置默认值 |
-| 📤 导入/导出 | 流程定义和套件支持 JSON 导出/导入，方便分享移植 |
-| 🔗 子流程编排 | SUB_FLOW 节点可调用已发布的其他流程，支持入参/出参变量映射 |
-| 🔐 JWT 认证 | 控制台登录认证 |
+</div>
 
 ---
 
-## 技术栈
+## 📖 简介
 
-| 层次 | 技术 |
+Juggle 中文有"积木、魔法"之意，寓意像积木一样灵活，像魔法一样强大，满足灵活多变的业务需求，助力业务快速落地！
+
+Juggle 是一个**图形化微服务编排工具**，通过简单的流程编排，快速完成接口开发，大大提高开发效率。
+
+### ✨ 核心能力
+
+| 场景 | 说明 |
 |------|------|
-| 后端框架 | ASP.NET Core 8 Web API |
-| 架构模式 | DDD 四层架构（Api / Application / Domain / Infrastructure） |
-| 数据库 | SQLite（EF Core 8） |
-| 多数据库 | MySqlConnector / Npgsql / Microsoft.Data.SqlClient |
-| 认证 | JWT Bearer Token |
-| 文档 | Swagger / OpenAPI |
-| 前端框架 | Vue 3 (Composition API + TypeScript) |
-| UI 组件库 | Element Plus |
-| 流程画布 | @vue-flow/core |
-| 状态管理 | Pinia |
-| 路由 | Vue Router 4 |
-| 构建工具 | Vite 8 |
+| 🧩 微服务编排 | 根据已有基础接口快速编排开发新接口 |
+| 🔗 系统集成 | 快速打通第三方系统平台，消除系统壁垒 |
+| 📦 BFF 层 | 面向前端提供聚合/适配层（Backend for Frontend）|
+| 🎨 定制开发 | 私有化标准功能定制，避免污染标准代码 |
 
 ---
 
-## 目录结构
+## 🚀 快速开始
 
+### Docker 一键启动
+
+```bash
+docker run -d \
+  --name juggle \
+  -p 9127:9127 \
+  -v juggle_data:/data \
+  pythonhuang/juggle-net8:v1.0
 ```
-JuggleNet6/
-├── Juggle.Api/               # 入口层：14个 Controller + Program.cs
-│   ├── Controllers/
-│   │   ├── Api/              # 业务 Controller（流程、套件、系统等）
-│   │   └── Open/             # 开放接口（外部触发流程）
-│   ├── wwwroot/              # 前端构建产物（生产模式集成）
-│   ├── juggle.db             # SQLite 数据库文件
-│   └── Program.cs
-│
-├── Juggle.Application/       # 应用层：Service + DTO
-│   ├── Services/
-│   │   ├── Flow/             # 流程执行服务
-│   │   └── Impl/             # DataSourceService、JwtService
-│   └── Models/
-│       ├── Request/          # 请求 DTO
-│       └── Response/         # ApiResult 统一响应
-│
-├── Juggle.Domain/            # 领域层：实体 + 流程引擎
-│   ├── Entities/             # 15个领域实体
-│   └── Engine/               # FlowEngine + 9个节点执行器
-│
-├── Juggle.Infrastructure/    # 基础设施层
-│   ├── Persistence/          # JuggleDbContext（EF Core）
-│   └── Common/               # JsonHelper、Md5Helper
-│
-├── JuggleNet6.Frontend/      # Vue3 前端
-│   └── src/views/            # 功能页面（flow/suite/system/object）
-│
-├── JuggleNet6.Backend/       # 原单体后端（保留参考，已废弃）
-├── Architecture.md           # 系统架构文档
-├── DesignDoc.md              # 系统详细设计文档
-└── Juggle.sln                # Visual Studio 解决方案
+
+或使用 docker-compose：
+
+```bash
+docker-compose up -d
 ```
+
+- 访问地址：http://localhost:9127
+- 默认账号：`juggle` / `juggle`
 
 ---
 
-## 快速开始
+## 🛠️ 技术栈
 
-### 环境要求
-
-- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
-- [Node.js 18+](https://nodejs.org/)
-
-### 启动后端
-
-```powershell
-cd JuggleNet6\Juggle.Api
-dotnet run
-```
-
-服务启动后访问：
-- 应用首页：http://localhost:9127/
-- Swagger 文档：http://localhost:9127/swagger
-
-### 启动前端（开发模式）
-
-```powershell
-cd JuggleNet6\JuggleNet6.Frontend
-npm install
-npm run dev
-```
-
-前端开发服务：http://localhost:5173/
-
-### 构建前端并集成到后端（生产模式）
-
-```powershell
-cd JuggleNet6\JuggleNet6.Frontend
-npm run build
-Copy-Item dist\* ..\Juggle.Api\wwwroot\ -Recurse -Force
-```
-
----
-
-## 默认账号
-
-| 用户名 | 密码 |
-|--------|------|
-| juggle | juggle |
-
----
-
-## 流程节点类型
-
-| 节点 | 说明 |
+| 层级 | 技术 |
 |------|------|
-| START | 开始节点，流程入口 |
-| END | 结束节点，流程出口 |
-| METHOD | 方法节点，调用外部 HTTP API |
-| CONDITION | 条件节点，多分支判断 |
-| ASSIGN | 赋值节点，变量赋值/类型转换，支持读写全局静态变量 |
-| CODE | 代码节点，执行 JavaScript 脚本（`$var`/`$static` 对象） |
-| MYSQL | 数据库节点，执行 SQL 查询（支持 `${varName}` 模板替换） |
-| MERGE | 聚合节点，多分支汇聚 |
-| **SUB_FLOW** | **子流程节点，调用已发布的其他流程，支持入参/出参变量映射** |
+| 后端 | ASP.NET Core 8 / EF Core 8 / SQLite |
+| 前端 | Vue3 / Vite / Element Plus / Pinia |
+| 容器 | Docker (multi-stage build) |
+| 认证 | JWT + RBAC 角色权限 |
 
 ---
 
-## API 接口规范
+## 📦 功能特性（30+ 项）
 
-| 前缀 | 用途 | 认证方式 |
-|------|------|---------|
-| `/api/` | 控制台管理接口 | JWT Token |
-| `/open/` | 开放接口（外部触发流程） | API Token |
+### 核心流程
+- ✅ 可视化流程设计器（节点画布）
+- ✅ **13 种节点**：START / END / METHOD / CONDITION / MERGE / ASSIGN / CODE / DB / SUB_FLOW / LOOP / DELAY / PARALLEL / NOTIFY
+- ✅ 节点超时 & 重试策略
+- ✅ 流程版本管理 & 版本对比
+- ✅ 流程克隆 / 导入 / 导出（含 Word 文档）
+- ✅ 流程分组管理
 
-统一响应格式：
-```json
-{
-  "code": 200,
-  "message": "success",
-  "data": { ... }
-}
+### 触发方式
+- ✅ 同步触发 `GET/POST /open/flow/trigger/{key}`
+- ✅ 异步触发 + 结果查询
+- ✅ Webhook 触发（含签名验证）
+- ✅ 定时任务调度
+
+### 套件 & 接口
+- ✅ 套件 / 接口 / 对象 / 参数管理
+- ✅ 接口 Mock 功能
+
+### 监控 & 测试
+- ✅ 监控仪表盘
+- ✅ 执行日志（含节点级日志）
+- ✅ 流程测试用例（断言 + 批量执行）
+- ✅ Monaco Editor 代码编辑（JS / SQL 高亮 + 自动补全）
+
+### 系统管理
+- ✅ 用户管理 / 角色管理 / 菜单权限（RBAC）
+- ✅ 多租户数据隔离（JWT Claims 驱动）
+- ✅ 审计日志 / Token 权限管理
+- ✅ 系统配置中心 / 全局异常告警
+
+### 数据库支持
+- **系统数据库**：SQLite / MySQL / PostgreSQL / SQLServer
+- **业务数据源**：SQLite / MySQL / PostgreSQL / SQLServer / Oracle / 达梦
+
+---
+
+## 📚 文档
+
+- [原项目文档](https://juggle.plus/docs/guide/introduce/introduce.html)（Java 版本参考）
+- [Release Notes](./RELEASE.md)
+
+---
+
+## 🙏 致谢
+
+本项目基于 [Juggle](https://github.com/somta/Juggle) 原始 Java 版本的设计思路与架构进行重构实现。
+
+感谢 [@somta](https://github.com/somta) 及原项目团队！
+
+---
+
+<div id="english"></div>
+
+<br><br>
+
+---
+
+<div align="center">
+
+# 🎪 Juggle - API Orchestration Platform
+
+<p>
+  <a href="https://github.com/pythonHuang/JuggleNet6/releases"><img src="https://img.shields.io/github/v/release/pythonHuang/JuggleNet6?style=flat-square" alt="Release"></a>
+  <a href="https://github.com/pythonHuang/JuggleNet6/blob/main/LICENSE"><img src="https://img.shields.io/github/license/pythonHuang/JuggleNet6?style=flat-square" alt="License"></a>
+  <a href="https://dotnet.microsoft.com/download/dotnet/8.0"><img src="https://img.shields.io/badge/.NET-8.0-512BD4?style=flat-square&logo=dotnet" alt=".NET 8"></a>
+  <a href="https://vuejs.org/"><img src="https://img.shields.io/badge/Vue-3.0-4FC08D?style=flat-square&logo=vue.js" alt="Vue 3"></a>
+</p>
+
+[中文](#-简介) | **English**
+
+</div>
+
+---
+
+## 📖 Introduction
+
+Juggle means "building blocks" and "magic" in Chinese, symbolizing flexibility like building blocks and power like magic — meeting flexible business needs and helping you deliver quickly!
+
+Juggle is a **graphical microservice orchestration tool** that enables rapid API development through simple visual workflow design.
+
+### ✨ Core Capabilities
+
+| Scenario | Description |
+|----------|-------------|
+| 🧩 Microservice Orchestration | Quickly build new APIs by orchestrating existing base APIs |
+| 🔗 System Integration | Rapidly integrate with third-party platforms, breaking down system barriers |
+| 📦 BFF Layer | Provide aggregation/adaptation layer for frontend (Backend for Frontend) |
+| 🎨 Custom Development | Privatized standard function customization without polluting core code |
+
+---
+
+## 🚀 Quick Start
+
+### Docker One-Click Start
+
+```bash
+docker run -d \
+  --name juggle \
+  -p 9127:9127 \
+  -v juggle_data:/data \
+  pythonhuang/juggle-net8:v1.0
 ```
 
----
+Or use docker-compose:
 
-## 开放接口访问方式
-
-```http
-# 带版本号触发（指定某一版本）
-POST /open/flow/trigger/v1/sync_abcdefghij
-X-Access-Token: your-api-token
-
-# 不带版本号触发（自动取最新已发布版本）
-POST /open/flow/trigger/sync_abcdefghij
-X-Access-Token: your-api-token
+```bash
+docker-compose up -d
 ```
 
----
-
-## 导入/导出功能
-
-流程定义和套件均支持 JSON 格式的导入/导出，方便在不同环境间分享和移植：
-
-| 操作 | 接口 |
-|------|------|
-| 导出流程定义 | `GET /api/flow/definition/export/{id}` |
-| 导入流程定义 | `POST /api/flow/definition/import` |
-| 导出套件（含接口+参数） | `GET /api/suite/export/{id}` |
-| 导入套件 | `POST /api/suite/import` |
-
-> 导入时自动生成新的唯一标识（flowKey / suiteCode），不会覆盖已有数据。
+- Access: http://localhost:9127
+- Default credentials: `juggle` / `juggle`
 
 ---
 
-## 相关文档
+## 🛠️ Tech Stack
 
-- [架构文档](./Architecture.md) - 系统总体架构设计
-- [设计文档](./DesignDoc.md) - 系统详细设计说明
-- [后端 README](./Juggle.Api/README.md) - 后端项目说明
-- [前端 README](./JuggleNet6.Frontend/README.md) - 前端项目说明
+| Layer | Technology |
+|-------|------------|
+| Backend | ASP.NET Core 8 / EF Core 8 / SQLite |
+| Frontend | Vue3 / Vite / Element Plus / Pinia |
+| Container | Docker (multi-stage build) |
+| Auth | JWT + RBAC Role-Based Access Control |
 
 ---
 
-## 致谢
+## 📦 Features (30+)
 
-本项目基于 [Juggle](https://github.com/somta/Juggle) 原始 Java 版本的设计思路与架构，使用 .NET 8 + Vue3 + SQLite 进行重构实现。
+### Core Workflow
+- ✅ Visual workflow designer (node canvas)
+- ✅ **13 Node Types**: START / END / METHOD / CONDITION / MERGE / ASSIGN / CODE / DB / SUB_FLOW / LOOP / DELAY / PARALLEL / NOTIFY
+- ✅ Node timeout & retry policies
+- ✅ Workflow version management & comparison
+- ✅ Clone / Import / Export (with Word docs)
+- ✅ Workflow grouping
 
-感谢 [@somta](https://github.com/somta) 及原项目团队提供的思路与支持！
+### Trigger Methods
+- ✅ Synchronous trigger `GET/POST /open/flow/trigger/{key}`
+- ✅ Asynchronous trigger + result query
+- ✅ Webhook trigger (with signature verification)
+- ✅ Scheduled task scheduling
 
-> 原项目：https://github.com/somta/Juggle
+### Suite & API Management
+- ✅ Suite / API / Object / Parameter management
+- ✅ API Mock functionality
+
+### Monitoring & Testing
+- ✅ Monitoring dashboard
+- ✅ Execution logs (with node-level logs)
+- ✅ Workflow test cases (assertions + batch execution)
+- ✅ Monaco Editor code editing (JS / SQL highlighting + autocomplete)
+
+### System Management
+- ✅ User management / Role management / Menu permissions (RBAC)
+- ✅ Multi-tenant data isolation (JWT Claims driven)
+- ✅ Audit logs / Token permission management
+- ✅ System config center / Global exception alerting
+
+### Database Support
+- **System Database**: SQLite / MySQL / PostgreSQL / SQLServer
+- **Business Data Sources**: SQLite / MySQL / PostgreSQL / SQLServer / Oracle / Dameng
+
+---
+
+## 📚 Documentation
+
+- [Original Project Docs](https://juggle.plus/docs/guide/introduce/introduce.html) (Java version reference)
+- [Release Notes](./RELEASE.md)
+
+---
+
+## 🙏 Acknowledgments
+
+This project is a .NET 8 reimplementation based on the design and architecture of the original [Juggle](https://github.com/somta/Juggle) Java version.
+
+Thanks to [@somta](https://github.com/somta) and the original team!
+
+---
+
+## 📄 License
+
+[MIT License](./LICENSE)
