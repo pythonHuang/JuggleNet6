@@ -5,7 +5,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: juggle-net8:latest
+    image: pythonhuang/juggle-net8:v1.0
     container_name: juggle
     restart: unless-stopped
     ports:

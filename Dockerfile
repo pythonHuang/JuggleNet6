@@ -1,4 +1,9 @@
 # ============================================================
+# Juggle 接口编排平台 - .NET 8 + Vue3
+# Version: 1.0
+# ============================================================
+
+# ============================================================
 # Stage 1: 构建前端 (Node.js)
 # ============================================================
 FROM node:20-alpine AS frontend-build
@@ -48,6 +53,13 @@ RUN dotnet publish Juggle.Api/Juggle.Api.csproj \
 # Stage 3: 最终运行镜像 (.NET 8 Runtime)
 # ============================================================
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
+
+# OCI 镜像元数据
+LABEL org.opencontainers.image.title="Juggle 接口编排平台"
+LABEL org.opencontainers.image.description="Java/Spring Boot Juggle 接口编排的 .NET 8 移植版，支持流程设计、调度、多租户"
+LABEL org.opencontainers.image.version="1.0"
+LABEL org.opencontainers.image.source="https://github.com/pythonHuang/JuggleNet6"
+LABEL org.opencontainers.image.authors="pythonHuang"
 
 WORKDIR /app
 
