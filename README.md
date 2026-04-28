@@ -104,6 +104,18 @@ docker-compose up -d
 
 ---
 
+## 📸 界面预览
+
+### 流程设计器
+
+![流程设计器](./images/flowdesign.png)
+
+### 流程设计示例
+
+![流程设计示例](./images/flowdesign01.png)
+
+---
+
 ## 📚 文档
 
 - [原项目文档](https://juggle.plus/docs/guide/introduce/introduce.html)（Java 版本参考）
