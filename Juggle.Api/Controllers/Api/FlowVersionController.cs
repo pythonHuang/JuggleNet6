@@ -8,6 +8,10 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Juggle.Api.Controllers.Api;
 
+/// <summary>
+/// 流程版本管理控制器
+/// 提供流程版本的查询、状态管理、手动触发执行等功能
+/// </summary>
 [ApiController]
 [Route("api/flow/version")]
 [Authorize]
@@ -16,12 +20,22 @@ public class FlowVersionController : ControllerBase
     private readonly JuggleDbContext      _db;
     private readonly FlowExecutionService _flowExec;
 
+    /// <summary>
+    /// 构造函数
+    /// </summary>
+    /// <param name="db">数据库上下文</param>
+    /// <param name="flowExec">流程执行服务</param>
     public FlowVersionController(JuggleDbContext db, FlowExecutionService flowExec)
     {
         _db       = db;
         _flowExec = flowExec;
     }
 
+    /// <summary>
+    /// 分页查询流程版本列表
+    /// </summary>
+    /// <param name="req">版本分页请求参数</param>
+    /// <returns>流程版本列表</returns>
     [HttpPost("page")]
     public async Task<ApiResult> Page([FromBody] FlowVersionPageRequest req)
     {

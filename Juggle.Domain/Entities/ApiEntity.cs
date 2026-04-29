@@ -1,17 +1,54 @@
 namespace Juggle.Domain.Entities;
 
+/// <summary>
+/// API 方法定义实体
+/// 用于存储可被流程调用的外部 API 元数据信息
+/// </summary>
 public class ApiEntity : BaseEntity
 {
+    /// <summary>
+    /// 所属套件编码
+    /// </summary>
     public string? SuiteCode { get; set; }
+
+    /// <summary>
+    /// 方法编码（唯一标识）
+    /// </summary>
     public string? MethodCode { get; set; }
+
+    /// <summary>
+    /// 方法名称（中文描述）
+    /// </summary>
     public string? MethodName { get; set; }
+
+    /// <summary>
+    /// 方法描述
+    /// </summary>
     public string? MethodDesc { get; set; }
+
+    /// <summary>
+    /// API 请求地址（URL）
+    /// </summary>
     public string? Url { get; set; }
-    /// <summary>GET POST PUT DELETE</summary>
+
+    /// <summary>
+    /// HTTP 请求方法：GET / POST / PUT / DELETE
+    /// </summary>
     public string? RequestType { get; set; }
-    /// <summary>JSON FORM</summary>
+
+    /// <summary>
+    /// 请求内容类型：JSON / FORM
+    /// </summary>
     public string? ContentType { get; set; }
+
+    /// <summary>
+    /// Mock 模式返回的预设 JSON 数据
+    /// 设置后调用此方法时跳过真实请求，直接返回此数据
+    /// </summary>
     public string? MockJson { get; set; }
-    /// <summary>HTTP WEBSERVICE</summary>
+
+    /// <summary>
+    /// 调用方式：HTTP / WEBSERVICE
+    /// </summary>
     public string? MethodType { get; set; } = "HTTP";
 }

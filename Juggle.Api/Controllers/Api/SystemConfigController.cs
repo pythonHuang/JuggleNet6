@@ -8,6 +8,11 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Juggle.Api.Controllers.Api;
 
+/// <summary>
+/// 系统配置控制器
+/// 提供系统配置项的查询、保存等功能
+/// 支持邮件配置、告警配置、系统参数等
+/// </summary>
 [ApiController]
 [Route("api/system/config")]
 [Authorize]
@@ -38,11 +43,20 @@ public class SystemConfigController : ControllerBase
         ("system.log.keep.days","日志保留天数",  "system", "30"),
     };
 
+    /// <summary>
+    /// 构造函数
+    /// </summary>
+    /// <param name="db">数据库上下文</param>
     public SystemConfigController(JuggleDbContext db)
     {
         _db = db;
     }
 
+    /// <summary>
+    /// 获取所有配置项
+    /// 首次访问时自动初始化默认配置
+    /// </summary>
+    /// <returns>按分组组织的配置项列表</returns>
     [HttpGet("all")]
     public async Task<ApiResult> GetAll()
     {

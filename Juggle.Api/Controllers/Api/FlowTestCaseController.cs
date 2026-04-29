@@ -10,6 +10,10 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Juggle.Api.Controllers.Api;
 
+/// <summary>
+/// 流程测试用例控制器
+/// 提供测试用例的增删改查、批量执行、断言校验等功能
+/// </summary>
 [ApiController]
 [Route("api/flow/testcase")]
 [Authorize]
@@ -18,12 +22,22 @@ public class FlowTestCaseController : ControllerBase
     private readonly JuggleDbContext    _db;
     private readonly FlowExecutionService _flowExec;
 
+    /// <summary>
+    /// 构造函数
+    /// </summary>
+    /// <param name="db">数据库上下文</param>
+    /// <param name="flowExec">流程执行服务</param>
     public FlowTestCaseController(JuggleDbContext db, FlowExecutionService flowExec)
     {
         _db       = db;
         _flowExec = flowExec;
     }
 
+    /// <summary>
+    /// 分页查询测试用例列表
+    /// </summary>
+    /// <param name="req">测试用例分页请求参数</param>
+    /// <returns>测试用例列表</returns>
     [HttpPost("page")]
     public async Task<ApiResult> Page([FromBody] FlowTestCasePageRequest req)
     {

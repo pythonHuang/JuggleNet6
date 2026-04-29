@@ -10,6 +10,11 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Juggle.Api.Controllers.Api;
 
+/// <summary>
+/// 定时任务控制器
+/// 提供定时任务的增删改查、启停控制、手动触发等功能
+/// 定时任务基于 Cron 表达式实现定时触发已部署的流程
+/// </summary>
 [ApiController]
 [Route("api/schedule")]
 [Authorize]
@@ -18,12 +23,22 @@ public class ScheduleTaskController : ControllerBase
     private readonly JuggleDbContext _db;
     private readonly ITenantAccessor _tenant;
 
+    /// <summary>
+    /// 构造函数
+    /// </summary>
+    /// <param name="db">数据库上下文</param>
+    /// <param name="tenant">多租户访问器</param>
     public ScheduleTaskController(JuggleDbContext db, ITenantAccessor tenant)
     {
         _db = db;
         _tenant = tenant;
     }
 
+    /// <summary>
+    /// 新增定时任务
+    /// </summary>
+    /// <param name="req">定时任务信息</param>
+    /// <returns>新增的任务 ID</returns>
     [HttpPost("add")]
     public async Task<ApiResult> Add([FromBody] ScheduleTaskAddRequest req)
     {

@@ -11,6 +11,10 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Juggle.Api.Controllers.Api;
 
+/// <summary>
+/// 流程定义控制器
+/// 提供流程的增删改查、调试、部署、导入导出等功能
+/// </summary>
 [ApiController]
 [Route("api/flow/definition")]
 [Authorize]
@@ -20,6 +24,12 @@ public class FlowDefinitionController : ControllerBase
     private readonly FlowExecutionService _flowExec;
     private readonly ITenantAccessor _tenant;
 
+    /// <summary>
+    /// 构造函数
+    /// </summary>
+    /// <param name="db">数据库上下文</param>
+    /// <param name="flowExec">流程执行服务</param>
+    /// <param name="tenant">多租户访问器</param>
     public FlowDefinitionController(JuggleDbContext db, FlowExecutionService flowExec, ITenantAccessor tenant)
     {
         _db       = db;
@@ -27,6 +37,11 @@ public class FlowDefinitionController : ControllerBase
         _tenant   = tenant;
     }
 
+    /// <summary>
+    /// 新增流程定义
+    /// </summary>
+    /// <param name="req">流程基本信息（名称、描述、类型、分组）</param>
+    /// <returns>新创建的流程 ID 和 FlowKey</returns>
     [HttpPost("add")]
     public async Task<ApiResult> Add([FromBody] FlowDefinitionAddRequest req)
     {

@@ -10,6 +10,10 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Juggle.Api.Controllers.Api;
 
+/// <summary>
+/// 数据源管理控制器
+/// 提供数据源的增删改查、连接测试等功能
+/// </summary>
 [ApiController]
 [Route("api/system/datasource")]
 [Authorize]
@@ -19,6 +23,12 @@ public class DataSourceController : ControllerBase
     private readonly DataSourceService _dsService;
     private readonly ITenantAccessor _tenant;
 
+    /// <summary>
+    /// 构造函数
+    /// </summary>
+    /// <param name="db">数据库上下文</param>
+    /// <param name="dsService">数据源服务</param>
+    /// <param name="tenant">多租户访问器</param>
     public DataSourceController(JuggleDbContext db, DataSourceService dsService, ITenantAccessor tenant)
     {
         _db        = db;
@@ -26,6 +36,11 @@ public class DataSourceController : ControllerBase
         _tenant    = tenant;
     }
 
+    /// <summary>
+    /// 新增数据源
+    /// </summary>
+    /// <param name="req">数据源信息</param>
+    /// <returns>新增的数据源 ID</returns>
     [HttpPost("add")]
     public async Task<ApiResult> Add([FromBody] DataSourceAddRequest req)
     {

@@ -12,6 +12,10 @@ using System.Text.Json;
 
 namespace Juggle.Api.Controllers.Api;
 
+/// <summary>
+/// 用户管理控制器
+/// 提供用户登录、信息查询、CRUD 等功能
+/// </summary>
 [ApiController]
 [Route("api/user")]
 public class UserController : ControllerBase
@@ -20,6 +24,12 @@ public class UserController : ControllerBase
     private readonly JwtService      _jwtService;
     private readonly ITenantAccessor _tenant;
 
+    /// <summary>
+    /// 构造函数
+    /// </summary>
+    /// <param name="db">数据库上下文</param>
+    /// <param name="jwtService">JWT 签发服务</param>
+    /// <param name="tenant">多租户访问器</param>
     public UserController(JuggleDbContext db, JwtService jwtService, ITenantAccessor tenant)
     {
         _db         = db;
@@ -27,6 +37,12 @@ public class UserController : ControllerBase
         _tenant     = tenant;
     }
 
+    /// <summary>
+    /// 用户登录
+    /// 验证用户名密码，签发 JWT Token，并返回菜单权限
+    /// </summary>
+    /// <param name="req">登录请求（用户名、密码）</param>
+    /// <returns>登录结果（Token、用户信息、菜单权限）</returns>
     [HttpPost("login")]
     public async Task<ApiResult> Login([FromBody] LoginRequest req)
     {

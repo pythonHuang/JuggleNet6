@@ -9,7 +9,11 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Juggle.Api.Controllers.Api;
 
-/// <summary>静态（全局）变量管理接口</summary>
+/// <summary>
+/// 静态（全局）变量管理控制器
+/// 提供静态变量的增删改查、值修改、重置等功能
+/// 静态变量可在流程中被引用和修改
+/// </summary>
 [ApiController]
 [Route("api/system/static-var")]
 [Authorize]
@@ -17,12 +21,23 @@ public class StaticVariableController : ControllerBase
 {
     private readonly JuggleDbContext _db;
     private readonly ITenantAccessor _tenant;
+
+    /// <summary>
+    /// 构造函数
+    /// </summary>
+    /// <param name="db">数据库上下文</param>
+    /// <param name="tenant">多租户访问器</param>
     public StaticVariableController(JuggleDbContext db, ITenantAccessor tenant)
     {
         _db = db;
         _tenant = tenant;
     }
 
+    /// <summary>
+    /// 获取静态变量列表
+    /// </summary>
+    /// <param name="groupName">可选，按分组名称筛选</param>
+    /// <returns>静态变量列表</returns>
     [HttpGet("list")]
     public async Task<ApiResult> List([FromQuery] string? groupName)
     {

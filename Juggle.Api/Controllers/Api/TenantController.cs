@@ -11,6 +11,11 @@ using System.Text.Json;
 
 namespace Juggle.Api.Controllers.Api;
 
+/// <summary>
+/// 租户管理控制器
+/// 提供租户的增删改查、审计日志查看等功能
+/// 仅超级管理员可访问
+/// </summary>
 [ApiController]
 [Route("api/tenant")]
 public class TenantController : ControllerBase
@@ -18,13 +23,23 @@ public class TenantController : ControllerBase
     private readonly JuggleDbContext _db;
     private readonly ITenantAccessor _tenant;
 
+    /// <summary>
+    /// 构造函数
+    /// </summary>
+    /// <param name="db">数据库上下文</param>
+    /// <param name="tenant">多租户访问器</param>
     public TenantController(JuggleDbContext db, ITenantAccessor tenant)
     {
         _db = db;
         _tenant = tenant;
     }
 
-    /// <summary>租户分页列表（仅超级管理员可访问）</summary>
+    /// <summary>
+    /// 租户分页列表
+    /// 仅超级管理员可访问
+    /// </summary>
+    /// <param name="req">分页请求参数</param>
+    /// <returns>租户列表（包含菜单权限和用户数量）</returns>
     [HttpPost("page"), Authorize]
     public async Task<ApiResult> Page([FromBody] PageRequest req)
     {

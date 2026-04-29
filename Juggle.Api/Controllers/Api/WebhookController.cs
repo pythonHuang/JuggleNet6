@@ -8,7 +8,11 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Juggle.Api.Controllers.Api;
 
-/// <summary>Webhook 管理接口</summary>
+/// <summary>
+/// Webhook 管理控制器
+/// 提供 Webhook 的增删改查、启停控制等功能
+/// Webhook 用于从外部系统触发流程执行
+/// </summary>
 [ApiController]
 [Route("api/system/webhook")]
 [Authorize]
@@ -17,13 +21,22 @@ public class WebhookController : ControllerBase
     private readonly JuggleDbContext _db;
     private readonly ITenantAccessor _tenant;
 
+    /// <summary>
+    /// 构造函数
+    /// </summary>
+    /// <param name="db">数据库上下文</param>
+    /// <param name="tenant">多租户访问器</param>
     public WebhookController(JuggleDbContext db, ITenantAccessor tenant)
     {
         _db = db;
         _tenant = tenant;
     }
 
-    /// <summary>分页查询 Webhook 列表</summary>
+    /// <summary>
+    /// 分页查询 Webhook 列表
+    /// </summary>
+    /// <param name="req">分页请求参数</param>
+    /// <returns>Webhook 列表</returns>
     [HttpPost("page")]
     public async Task<ApiResult> Page([FromBody] PageRequest req)
     {

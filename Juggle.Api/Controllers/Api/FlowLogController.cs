@@ -7,15 +7,29 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Juggle.Api.Controllers.Api;
 
+/// <summary>
+/// 流程日志控制器
+/// 提供流程执行日志的查询、详情查看、删除、统计等功能
+/// </summary>
 [ApiController]
 [Route("api/flow/log")]
 [Authorize]
 public class FlowLogController : ControllerBase
 {
     private readonly JuggleDbContext _db;
+
+    /// <summary>
+    /// 构造函数
+    /// </summary>
+    /// <param name="db">数据库上下文</param>
     public FlowLogController(JuggleDbContext db) => _db = db;
 
-    /// <summary>分页查询流程执行日志</summary>
+    /// <summary>
+    /// 分页查询流程执行日志
+    /// 支持按流程 Key、状态、时间范围筛选
+    /// </summary>
+    /// <param name="req">日志分页请求参数</param>
+    /// <returns>流程执行日志列表</returns>
     [HttpPost("page")]
     public async Task<ApiResult> Page([FromBody] FlowLogPageRequest req)
     {

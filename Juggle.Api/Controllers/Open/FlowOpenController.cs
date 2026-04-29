@@ -7,7 +7,11 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Juggle.Api.Controllers.Open;
 
-/// <summary>开放接口：供外部系统通过 Access Token 触发流程执行。</summary>
+/// <summary>
+/// 流程开放接口控制器
+/// 供外部系统通过 Access Token 触发流程执行
+/// 支持同步/异步执行、版本指定、权限校验等功能
+/// </summary>
 [ApiController]
 [Route("open/flow")]
 public class FlowOpenController : ControllerBase
@@ -15,12 +19,22 @@ public class FlowOpenController : ControllerBase
     private readonly JuggleDbContext      _db;
     private readonly FlowExecutionService _flowExec;
 
+    /// <summary>
+    /// 构造函数
+    /// </summary>
+    /// <param name="db">数据库上下文</param>
+    /// <param name="flowExec">流程执行服务</param>
     public FlowOpenController(JuggleDbContext db, FlowExecutionService flowExec)
     {
         _db       = db;
         _flowExec = flowExec;
     }
 
+    /// <summary>
+    /// 验证 Token 是否有效
+    /// </summary>
+    /// <param name="token">Access Token</param>
+    /// <returns>Token 是否有效</returns>
     private async Task<bool> ValidateToken(string? token)
     {
         if (string.IsNullOrEmpty(token)) return false;

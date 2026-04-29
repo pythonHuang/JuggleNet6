@@ -10,6 +10,10 @@ using System.Text.Json;
 
 namespace Juggle.Api.Controllers.Api;
 
+/// <summary>
+/// 角色管理控制器
+/// 提供角色的增删改查、权限分配等功能
+/// </summary>
 [ApiController]
 [Route("api/role")]
 public class RoleController : ControllerBase
@@ -17,13 +21,23 @@ public class RoleController : ControllerBase
     private readonly JuggleDbContext _db;
     private readonly ITenantAccessor _tenant;
 
+    /// <summary>
+    /// 构造函数
+    /// </summary>
+    /// <param name="db">数据库上下文</param>
+    /// <param name="tenant">多租户访问器</param>
     public RoleController(JuggleDbContext db, ITenantAccessor tenant)
     {
         _db = db;
         _tenant = tenant;
     }
 
-    /// <summary>角色分页列表</summary>
+    /// <summary>
+    /// 角色分页列表
+    /// 普通用户只能看到本租户角色和全局角色
+    /// </summary>
+    /// <param name="req">分页请求参数</param>
+    /// <returns>角色列表（包含租户名称和菜单权限数量）</returns>
     [HttpPost("page"), Authorize]
     public async Task<ApiResult> Page([FromBody] PageRequest req)
     {

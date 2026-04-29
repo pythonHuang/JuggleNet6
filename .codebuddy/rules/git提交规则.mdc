@@ -1,0 +1,11 @@
+---
+description: 
+alwaysApply: true
+enabled: true
+updatedAt: 2026-04-29T09:05:02.109Z
+provider: 
+---
+
+git提交规则：
+1.每完成一个子任务，修复一个bug都要提交一次git
+2.注释使用中文
