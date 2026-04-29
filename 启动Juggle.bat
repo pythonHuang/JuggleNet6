@@ -19,7 +19,7 @@ cd /d "%SCRIPT_DIR%"
 echo 请选择启动方式:
 echo.
 echo   [1] Docker 启动 (推荐，需要 Docker Desktop)
-echo   [2] 直接运行 .NET 项目 (需要 .NET 8 SDK)
+echo   [2] Api + Vue 前后端同时启动 (需要 .NET 8 SDK 和 Node.js)
 echo   [3] 仅构建 Docker 镜像
 echo   [4] 清理 Docker 容器和镜像
 echo   [5] 查看日志 (Docker模式)
@@ -137,7 +137,7 @@ goto end
 
 :dotnet_run
 echo.
-echo [1/4] 检查 .NET SDK 版本...
+echo [1/6] 检查 .NET SDK 版本...
 dotnet --version >nul 2>&1
 if errorlevel 1 (
     echo [错误] 未安装 .NET 8 SDK，请先安装:
@@ -150,7 +150,20 @@ for /f "delims=" %%v in ('dotnet --version') do set DOTNET_VER=%%v
 echo [OK] .NET 版本: %DOTNET_VER%
 
 echo.
-echo [2/4] 还原 NuGet 包...
+echo [2/6] 检查 Node.js 版本...
+node --version >nul 2>&1
+if errorlevel 1 (
+    echo [错误] 未安装 Node.js，请先安装:
+    echo https://nodejs.org/
+    echo.
+    pause
+    goto menu
+)
+for /f "delims=" %%v in ('node --version') do set NODE_VER=%%v
+echo [OK] Node.js 版本: %NODE_VER%
+
+echo.
+echo [3/6] 还原 NuGet 包...
 dotnet restore Juggle.sln
 if errorlevel 1 (
     echo [错误] 包还原失败
@@ -160,7 +173,7 @@ if errorlevel 1 (
 )
 
 echo.
-echo [3/4] 构建项目...
+echo [4/6] 构建后端项目...
 dotnet build Juggle.sln -c Release
 if errorlevel 1 (
     echo [错误] 项目构建失败
@@ -170,17 +183,44 @@ if errorlevel 1 (
 )
 
 echo.
-echo [4/4] 启动服务...
+echo [5/6] 安装前端依赖...
+cd JuggleNet6.Frontend
+call npm install
+if errorlevel 1 (
+    echo [错误] 前端依赖安装失败
+    echo.
+    pause
+    goto menu
+)
+cd ..
+
+echo.
+echo [6/6] 启动服务...
+echo.
+
+:: 启动后端 API
+start "Juggle.Api" cmd /c "dotnet run --project Juggle.Api/Juggle.Api.csproj --no-build"
+
+:: 等待后端启动
+timeout /t 3 /nobreak >nul
+
+:: 启动前端 Vue
+start "Juggle.Vue" cmd /c "cd JuggleNet6.Frontend && npm run dev"
+
 echo.
 echo ╔══════════════════════════════════════════════════════════╗
-echo ║  Juggle 启动成功!                                         ║
+echo ║  Juggle 前后端启动成功!                                   ║
 echo ╠══════════════════════════════════════════════════════════╣
-echo ║  访问地址: http://localhost:9127                          ║
+echo ║  后端 API:  http://localhost:9127                         ║
+echo ║  前端界面:  http://localhost:5173                          ║
+echo ╠══════════════════════════════════════════════════════════╣
 echo ║  默认账号: juggle / juggle                                ║
-echo ║  按 Ctrl+C 停止服务                                       ║
+echo ║  关闭窗口即可停止服务                                     ║
 echo ╚══════════════════════════════════════════════════════════╝
 echo.
-dotnet run --project Juggle.Api/Juggle.Api.csproj --no-build
+echo 提示: 两个窗口分别运行后端和前端，关闭任意窗口不会影响另一个
+echo.
+pause
 goto end
 
 :end
