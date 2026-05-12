@@ -670,8 +670,9 @@
     <el-drawer v-model="paramDrawer" title="📋 流程参数配置" size="640px" direction="rtl">
       <el-tabs v-model="paramTab" style="padding:0 8px">
         <el-tab-pane label="入参（Input）" name="input">
-          <div style="margin-bottom:8px;text-align:right">
-            <el-button size="small" type="primary" icon="Plus" @click="addFlowParam('input')">添加入参</el-button>
+          <div style="margin-bottom:8px;display:flex;gap:8px;justify-content:flex-end">
+            <el-button size="small" icon="Plus" @click="addFlowParam('input')">添加入参</el-button>
+            <el-button size="small" icon="CollectionTag" @click="openFlowObjectDialog('input')">来自对象</el-button>
           </div>
           <el-table :data="flowInputParams" border size="small" empty-text="暂无入参">
             <el-table-column type="index" width="42" label="#" />
@@ -719,8 +720,9 @@
         </el-tab-pane>
 
         <el-tab-pane label="出参（Output）" name="output">
-          <div style="margin-bottom:8px;text-align:right">
-            <el-button size="small" type="primary" icon="Plus" @click="addFlowParam('output')">添加出参</el-button>
+          <div style="margin-bottom:8px;display:flex;gap:8px;justify-content:flex-end">
+            <el-button size="small" icon="Plus" @click="addFlowParam('output')">添加出参</el-button>
+            <el-button size="small" icon="CollectionTag" @click="openFlowObjectDialog('output')">来自对象</el-button>
           </div>
           <el-table :data="flowOutputParams" border size="small" empty-text="暂无出参">
             <el-table-column type="index" width="42" label="#" />
@@ -757,6 +759,31 @@
           </div>
         </el-tab-pane>
       </el-tabs>
+
+      <!-- 来自对象对话框（参数抽屉内） -->
+      <el-dialog v-model="flowObjDialogVisible" :title="`选择对象 — 导入${flowObjDialogType === 'input' ? '入参' : '出参'}`" width="480px" append-to-body>
+        <el-form label-width="80px">
+          <el-form-item label="选择对象">
+            <el-select v-model="selectedFlowObjId" placeholder="请选择对象类型" style="width:100%" @change="onFlowObjSelect">
+              <el-option v-for="obj in objectList" :key="obj.id" :label="`${obj.objectName} (${obj.objectCode})`" :value="obj.id" />
+            </el-select>
+          </el-form-item>
+        </el-form>
+        <el-divider v-if="flowObjPreviewParams.length > 0" />
+        <el-table v-if="flowObjPreviewParams.length > 0" :data="flowObjPreviewParams" border size="small" max-height="300">
+          <el-table-column prop="paramCode" label="参数Code" />
+          <el-table-column prop="paramName" label="参数名" />
+          <el-table-column label="数据类型" width="100">
+            <template #default="{ row }">
+              <el-tag size="small">{{ row.dataType }}</el-tag>
+            </template>
+          </el-table-column>
+        </el-table>
+        <template #footer>
+          <el-button @click="flowObjDialogVisible = false">取消</el-button>
+          <el-button type="primary" :disabled="flowObjPreviewParams.length === 0" @click="importFlowObjParams">导入到参数列表</el-button>
+        </template>
+      </el-dialog>
     </el-drawer>
 
     <!-- ========== 变量管理抽屉 ========== -->
@@ -1036,6 +1063,13 @@ const paramDrawer = ref(false)
 const paramTab = ref('input')
 const flowInputParams = ref<any[]>([])
 const flowOutputParams = ref<any[]>([])
+
+// 流程参数—来自对象功能
+const flowObjDialogVisible = ref(false)
+const flowObjDialogType = ref<'input' | 'output'>('input')
+const selectedFlowObjId = ref<number | null>(null)
+const flowObjPreviewParams = ref<any[]>([])
+const objectList = ref<any[]>([])
 
 // 变量管理
 const variableDrawer = ref(false)
@@ -1793,6 +1827,36 @@ async function saveFlowParams(type: 'input' | 'output') {
   await request.post('/parameter/save', payload)
   ElMessage.success(`${type === 'input' ? '入参' : '出参'}保存成功`)
   await loadFlowInfo()
+}
+
+// 流程参数—来自对象功能
+async function openFlowObjectDialog(type: 'input' | 'output') {
+  flowObjDialogType.value = type
+  selectedFlowObjId.value = null
+  flowObjPreviewParams.value = []
+  flowObjDialogVisible.value = true
+  const res: any = await request.get('/object/list')
+  objectList.value = res.data || []
+}
+
+async function onFlowObjSelect(objectId: number) {
+  const res: any = await request.get('/parameter/list', { params: { ownerId: objectId, paramType: 3 } })
+  flowObjPreviewParams.value = (res.data || []).map((p: any) => ({
+    ...p, required: p.required ?? 0, defaultValue: p.defaultValue ?? '', description: p.description ?? ''
+  }))
+}
+
+function importFlowObjParams() {
+  const target = flowObjDialogType.value === 'input' ? flowInputParams : flowOutputParams
+  for (const p of flowObjPreviewParams.value) {
+    target.value.push({
+      paramCode: p.paramCode, paramName: p.paramName,
+      dataType: p.dataType || 'string', required: flowObjDialogType.value === 'input' ? 1 : 0,
+      defaultValue: p.defaultValue ?? '', description: p.description ?? '', sortNum: 0
+    })
+  }
+  flowObjDialogVisible.value = false
+  ElMessage.success(`已导入 ${flowObjPreviewParams.value.length} 个参数，请手动保存`)
 }
 
 // 变量管理
