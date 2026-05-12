@@ -7,13 +7,16 @@
       </div>
       <el-menu :default-active="activeMenu" router background-color="#001529"
         text-color="#aaa" active-text-color="#fff" style="border:none">
+        <el-menu-item index="/flow/dashboard" v-if="hasMenu('/flow/dashboard')">
+          <el-icon><Histogram /></el-icon>
+          <span>监控仪表盘</span>
+        </el-menu-item>
         <el-sub-menu index="flow" v-if="hasMenu('/flow/define')">
           <template #title>
             <el-icon><Connection /></el-icon>
             <span>流程管理</span>
           </template>
           <el-menu-item index="/flow/define" v-if="hasMenu('/flow/define')">流程定义</el-menu-item>
-          <el-menu-item index="/flow/dashboard" v-if="hasMenu('/flow/dashboard')">监控仪表盘</el-menu-item>
           <el-menu-item index="/flow/list" v-if="hasMenu('/flow/list')">流程列表</el-menu-item>
           <el-menu-item index="/flow/log" v-if="hasMenu('/flow/log')">执行日志</el-menu-item>
           <el-menu-item index="/flow/testcase" v-if="hasMenu('/flow/testcase')">测试用例</el-menu-item>
@@ -84,7 +87,7 @@
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
-import { Connection, Grid, DataBoard, Setting, ArrowDown } from '@element-plus/icons-vue'
+import { Connection, Grid, DataBoard, Setting, ArrowDown, Histogram } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const router = useRouter()
