@@ -21,6 +21,11 @@ public class FlowDefinitionAddRequest
     public string FlowType { get; set; } = "sync";
 
     /// <summary>
+    /// 访问别名（唯一），设置后可通过 /open/services/{alias} 访问最新版本的流程
+    /// </summary>
+    public string? ServiceAlias { get; set; }
+
+    /// <summary>
     /// 分组名称（用于流程分类管理）
     /// </summary>
     public string? GroupName { get; set; }

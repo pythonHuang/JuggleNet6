@@ -27,6 +27,11 @@ public class FlowDefinitionUpdateRequest
     public string FlowType { get; set; } = "sync";
 
     /// <summary>
+    /// 访问别名（可选），全局唯一，用于 /open/services/{alias} 快捷访问
+    /// </summary>
+    public string? ServiceAlias { get; set; }
+
+    /// <summary>
     /// 分组名称（可选）
     /// 用于在界面上按组分类展示流程
     /// </summary>

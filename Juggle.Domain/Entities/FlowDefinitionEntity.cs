@@ -41,4 +41,9 @@ public class FlowDefinitionEntity : BaseEntity
     /// 状态：0-草稿，1-已部署
     /// </summary>
     public int Status { get; set; } = 0;
+
+    /// <summary>
+    /// 访问别名（唯一），设置后可通过 /open/services/{alias} 访问最新版本的流程
+    /// </summary>
+    public string? ServiceAlias { get; set; }
 }

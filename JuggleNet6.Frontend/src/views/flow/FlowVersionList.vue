@@ -63,6 +63,42 @@
       </div>
     </el-dialog>
 
+    <!-- 触发测试对话框 -->
+    <el-dialog v-model="testVisible" title="触发测试" width="700px" destroy-on-close>
+      <div style="margin-bottom:10px;color:#666;font-size:13px">
+        版本: <el-tag size="small" type="warning">{{ testVersion?.version }}</el-tag>
+        &nbsp;FlowKey: <el-tag size="small">{{ flowKey }}</el-tag>
+      </div>
+      <div v-if="testInputParams.length > 0" style="margin-bottom:8px">
+        <span style="font-size:13px;color:#666">已定义的入参：</span>
+        <el-tag v-for="p in testInputParams" :key="p.paramCode" size="small" style="margin-right:4px">
+          {{ p.paramCode }}({{ p.dataType }})
+        </el-tag>
+      </div>
+      <div v-else style="margin-bottom:8px;font-size:13px;color:#aaa">该流程未定义入参</div>
+      <el-form label-width="80px">
+        <el-form-item label="输入参数">
+          <el-input v-model="testParamsJson" type="textarea" :rows="6"
+            placeholder='{"input_name": "张三", "input_age": 25}' class="code-editor" />
+        </el-form-item>
+      </el-form>
+      <div v-if="testResult !== null" style="margin-top:12px">
+        <el-divider />
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+          <span style="font-weight:bold;font-size:15px" :style="{ color: testSuccess ? '#52c41a' : '#ff4d4f' }">
+            {{ testSuccess ? '执行成功' : '执行失败' }}
+          </span>
+          <span v-if="testCostMs" style="color:#888;font-size:12px">耗时 {{ testCostMs }} ms</span>
+          <span v-if="testLogId" style="color:#888;font-size:12px">LogId: {{ testLogId }}</span>
+        </div>
+        <el-input v-model="testResult" type="textarea" :rows="12" readonly style="font-family:monospace;font-size:13px" />
+      </div>
+      <template #footer>
+        <el-button @click="testVisible = false">关闭</el-button>
+        <el-button type="primary" :loading="testLoading" @click="executeTriggerTest">发送请求</el-button>
+      </template>
+    </el-dialog>
+
     <!-- 查看JSON对话框 -->
     <el-dialog v-model="jsonVisible" title="流程节点 JSON" width="70%" destroy-on-close>
       <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
@@ -91,6 +127,17 @@ const diffVisible = ref(false)
 const diffLeft = ref<number>(0)
 const diffRight = ref<number>(0)
 const diffResult = ref<any>(null)
+
+// 触发测试
+const testVisible = ref(false)
+const testLoading = ref(false)
+const testVersion = ref<any>(null)
+const testInputParams = ref<any[]>([])
+const testParamsJson = ref('{}')
+const testResult = ref<string | null>(null)
+const testSuccess = ref(false)
+const testCostMs = ref(0)
+const testLogId = ref(0)
 
 // 查看JSON
 const jsonVisible = ref(false)
@@ -121,10 +168,42 @@ async function doDelete(row: any) {
 }
 
 async function triggerTest(row: any) {
-  await ElMessageBox.confirm(`触发测试版本 ${row.version}（空参数）？`, '提示', { type: 'info' })
-  const res: any = await request.post(`/flow/version/trigger/${row.version}/${flowKey}`, { params: {} })
-  ElMessage.success('触发成功，请查看控制台输出')
-  console.log('流程执行结果:', res.data)
+  testVersion.value = row
+  testParamsJson.value = '{}'
+  testResult.value = null
+  testSuccess.value = false
+  testCostMs.value = 0
+  testLogId.value = 0
+  testVisible.value = true
+  try {
+    const infoRes: any = await request.get(`/flow/definition/infoByKey/${flowKey}`)
+    testInputParams.value = infoRes.data?.inputParams || []
+    if (testInputParams.value.length > 0) {
+      const defaults: Record<string, any> = {}
+      for (const p of testInputParams.value) {
+        defaults[p.paramCode] = p.defaultValue || ''
+      }
+      testParamsJson.value = JSON.stringify(defaults, null, 2)
+    }
+  } catch { testInputParams.value = [] }
+}
+
+async function executeTriggerTest() {
+  if (!testVersion.value) return
+  testLoading.value = true
+  testResult.value = null
+  try {
+    let params: any = {}
+    try { params = JSON.parse(testParamsJson.value) } catch { ElMessage.warning('输入参数JSON格式错误'); testLoading.value = false; return }
+    const res: any = await request.post(`/flow/version/trigger/${testVersion.value.version}/${flowKey}`, { params })
+    testSuccess.value = res.data?.success !== false
+    testCostMs.value = res.data?.costMs || 0
+    testLogId.value = res.data?.logId || 0
+    testResult.value = JSON.stringify(res.data, null, 2)
+  } catch (e: any) {
+    testSuccess.value = false
+    testResult.value = e?.message || '请求异常'
+  } finally { testLoading.value = false }
 }
 
 function copyVersionUrl(row: any) {
@@ -285,4 +364,5 @@ function copyJson() {
 .diff-line-added .diff-prefix { color: #4ec9b0; }
 .diff-line-removed .diff-prefix { color: #f44747; }
 .diff-text { white-space: pre-wrap; word-break: break-all; }
+.code-editor textarea { font-family: 'Consolas','Monaco',monospace; font-size: 13px; }
 </style>

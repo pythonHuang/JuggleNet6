@@ -45,18 +45,26 @@ public class FlowDefinitionController : ControllerBase
     [HttpPost("add")]
     public async Task<ApiResult> Add([FromBody] FlowDefinitionAddRequest req)
     {
+        // 别名唯一性校验
+        if (!string.IsNullOrWhiteSpace(req.ServiceAlias))
+        {
+            var aliasExists = await _db.FlowDefinitions
+                .AnyAsync(f => f.ServiceAlias == req.ServiceAlias && f.Deleted == 0);
+            if (aliasExists) return ApiResult.Fail($"访问别名 '{req.ServiceAlias}' 已被占用");
+        }
         var key = $"flow_{Guid.NewGuid():N}";
         var entity = new FlowDefinitionEntity
         {
-            FlowKey     = key,
-            FlowName    = req.FlowName,
-            FlowDesc    = req.FlowDesc,
-            FlowType    = req.FlowType,
-            GroupName   = req.GroupName,
-            FlowContent = "[]",
-            Status      = 0,
-            TenantId    = _tenant.TenantId,
-            CreatedAt   = DateTime.Now.ToString("o")
+            FlowKey      = key,
+            FlowName     = req.FlowName,
+            FlowDesc     = req.FlowDesc,
+            FlowType     = req.FlowType,
+            GroupName    = req.GroupName,
+            ServiceAlias = req.ServiceAlias,
+            FlowContent  = "[]",
+            Status       = 0,
+            TenantId     = _tenant.TenantId,
+            CreatedAt    = DateTime.Now.ToString("o")
         };
         _db.FlowDefinitions.Add(entity);
         await _db.SaveChangesAsync();
@@ -79,11 +87,19 @@ public class FlowDefinitionController : ControllerBase
     {
         var entity = await _db.FlowDefinitions.FindAsync(req.Id);
         if (entity == null) return ApiResult.Fail("流程不存在");
-        entity.FlowName  = req.FlowName;
-        entity.FlowDesc  = req.FlowDesc;
-        entity.FlowType  = req.FlowType;
-        entity.GroupName = req.GroupName;
-        entity.UpdatedAt = DateTime.Now.ToString("o");
+        // 别名唯一性校验（排除自身）
+        if (!string.IsNullOrWhiteSpace(req.ServiceAlias))
+        {
+            var aliasExists = await _db.FlowDefinitions
+                .AnyAsync(f => f.ServiceAlias == req.ServiceAlias && f.Id != req.Id && f.Deleted == 0);
+            if (aliasExists) return ApiResult.Fail($"访问别名 '{req.ServiceAlias}' 已被占用");
+        }
+        entity.FlowName     = req.FlowName;
+        entity.FlowDesc     = req.FlowDesc;
+        entity.FlowType     = req.FlowType;
+        entity.GroupName    = req.GroupName;
+        entity.ServiceAlias = req.ServiceAlias;
+        entity.UpdatedAt    = DateTime.Now.ToString("o");
         await _db.SaveChangesAsync();
         return ApiResult.Success();
     }

@@ -457,6 +457,7 @@
                   <el-option value="VARIABLE" label="变量" />
                   <el-option value="STATIC" label="静态" />
                   <el-option value="INPUT" label="入参" />
+                  <el-option value="INPUT_PROPERTY" label="入参子对象" />
                 </el-select>
                 <template v-if="rule.sourceType === 'CONSTANT'">
                   <el-input v-model="rule.source" placeholder="常量值" size="small" style="flex:1" />
@@ -476,6 +477,11 @@
                     <el-option v-for="p in flowInputParams" :key="p.paramCode" :value="p.paramCode" :label="`${p.paramName} (${p.paramCode})`" />
                   </el-select>
                 </template>
+                <template v-else-if="rule.sourceType === 'INPUT_PROPERTY'">
+                  <el-select v-model="rule.source" placeholder="选择入参" size="small" style="flex:1">
+                    <el-option v-for="p in flowInputParams" :key="p.paramCode" :value="p.paramCode" :label="`${p.paramName} (${p.paramCode})`" />
+                  </el-select>
+                </template>
               </div>
               <div class="assign-row" style="margin-top:4px">
                 <span style="font-size:12px;color:#666;width:72px;flex-shrink:0">→ 赋值给</span>
@@ -483,6 +489,8 @@
                   <el-option value="VARIABLE" label="变量" />
                   <el-option value="OUTPUT" label="出参" />
                   <el-option value="STATIC" label="静态" />
+                  <el-option value="INPUT" label="入参" />
+                  <el-option value="OUTPUT_PROPERTY" label="出参子对象" />
                 </el-select>
                 <el-select v-model="rule.target" :placeholder="getTargetPlaceholder(rule.targetType)" size="small" style="flex:1">
                   <template v-if="rule.targetType === 'VARIABLE'">
@@ -493,6 +501,12 @@
                   </template>
                   <template v-else-if="rule.targetType === 'STATIC'">
                     <el-option v-for="s in staticVariables" :key="s.varCode" :value="s.varCode" :label="`${s.varName} (${s.varCode})`" />
+                  </template>
+                  <template v-else-if="rule.targetType === 'INPUT'">
+                    <el-option v-for="p in flowInputParams" :key="p.paramCode" :value="p.paramCode" :label="`${p.paramName} (${p.paramCode})`" />
+                  </template>
+                  <template v-else-if="rule.targetType === 'OUTPUT_PROPERTY'">
+                    <el-option v-for="p in flowOutputParams" :key="p.paramCode" :value="p.paramCode" :label="`${p.paramName} (${p.paramCode})`" />
                   </template>
                 </el-select>
                 <el-select v-model="rule.dataType" size="small" style="width:72px;flex-shrink:0">
@@ -1738,6 +1752,8 @@ function getTargetPlaceholder(targetType: string) {
     case 'OUTPUT': return '选择输出参数';
     case 'STATIC': return '选择静态变量';
     case 'INPUT': return '选择入参';
+    case 'INPUT_PROPERTY': return '选择入参子对象';
+    case 'OUTPUT_PROPERTY': return '选择出参子对象';
     default: return '选择目标';
   }
 }

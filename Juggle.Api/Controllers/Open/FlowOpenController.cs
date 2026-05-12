@@ -121,6 +121,55 @@ public class FlowOpenController : ControllerBase
     }
 
     // ──────────────────────────────────────────────
+    // 服务别名访问（通过别名触发流程最新版本）
+    // ──────────────────────────────────────────────
+
+    /// <summary>
+    /// 通过服务别名触发流程（GET），自动查找对应流程并执行最新已发布版本。
+    /// 访问地址: /open/services/{alias}
+    /// </summary>
+    [HttpGet("services/{alias}")]
+    public async Task<ApiResult> ServiceGet(string alias,
+        [FromQuery] Dictionary<string, string> queryParams,
+        [FromHeader(Name = "X-Access-Token")] string? token)
+    {
+        if (!await ValidateToken(token))
+            return ApiResult.Fail("无效的 Access Token", 401);
+        var flowKey = await GetFlowKeyByAlias(alias);
+        if (flowKey == null) return ApiResult.Fail($"服务别名 '{alias}' 不存在");
+        if (!await ValidateFlowPermission(token, flowKey))
+            return ApiResult.Fail("该 Token 无权访问此流程");
+        return await TriggerFlowLatest(flowKey,
+            queryParams.ToDictionary(k => k.Key, k => (object?)k.Value));
+    }
+
+    /// <summary>
+    /// 通过服务别名触发流程（POST），自动查找对应流程并执行最新已发布版本。
+    /// 访问地址: /open/services/{alias}
+    /// </summary>
+    [HttpPost("services/{alias}")]
+    public async Task<ApiResult> ServicePost(string alias,
+        [FromBody] Dictionary<string, object?> bodyParams,
+        [FromHeader(Name = "X-Access-Token")] string? token)
+    {
+        if (!await ValidateToken(token))
+            return ApiResult.Fail("无效的 Access Token", 401);
+        var flowKey = await GetFlowKeyByAlias(alias);
+        if (flowKey == null) return ApiResult.Fail($"服务别名 '{alias}' 不存在");
+        if (!await ValidateFlowPermission(token, flowKey))
+            return ApiResult.Fail("该 Token 无权访问此流程");
+        return await TriggerFlowLatest(flowKey, bodyParams);
+    }
+
+    private async Task<string?> GetFlowKeyByAlias(string alias)
+    {
+        var definition = await _db.FlowDefinitions
+            .Where(f => f.ServiceAlias == alias && f.Deleted == 0)
+            .FirstOrDefaultAsync();
+        return definition?.FlowKey;
+    }
+
+    // ──────────────────────────────────────────────
     // 异步触发（立即返回 logId，后台执行）
     // ──────────────────────────────────────────────
 

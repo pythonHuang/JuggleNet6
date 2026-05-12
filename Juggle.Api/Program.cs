@@ -219,6 +219,9 @@ using (var scope = app.Services.CreateScope())
         // 补建流程定义分组字段
         try { db.Database.ExecuteSqlRaw("ALTER TABLE t_flow_definition ADD COLUMN group_name TEXT DEFAULT NULL;"); }
         catch { /* 列已存在则忽略 */ }
+        // 补建流程定义访问别名字段
+        try { db.Database.ExecuteSqlRaw("ALTER TABLE t_flow_definition ADD COLUMN service_alias TEXT DEFAULT NULL;"); }
+        catch { /* 列已存在则忽略 */ }
     }
 }
 

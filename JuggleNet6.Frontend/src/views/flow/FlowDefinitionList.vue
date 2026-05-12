@@ -77,7 +77,7 @@
     </el-card>
 
     <!-- 新建/编辑弹窗 -->
-    <el-dialog v-model="dialogVisible" :title="isEdit ? '编辑流程' : '新建流程'" width="500px">
+    <el-dialog v-model="dialogVisible" :title="isEdit ? '编辑流程' : '新建流程'" width="540px">
       <el-form ref="formRef" :model="form" :rules="rules" label-width="80px">
         <el-form-item label="流程名称" prop="flowName">
           <el-input v-model="form.flowName" placeholder="请输入流程名称" />
@@ -87,6 +87,12 @@
             <el-radio value="sync">同步</el-radio>
             <el-radio value="async">异步</el-radio>
           </el-radio-group>
+        </el-form-item>
+        <el-form-item label="访问别名">
+          <el-input v-model="form.serviceAlias" placeholder="可选，设置后通过 /open/services/别名 访问" />
+          <div style="font-size:11px;color:#999;margin-top:2px">
+            设置后可通过 GET/POST /open/services/{{ form.serviceAlias || '别名' }} 触发最新版本
+          </div>
         </el-form-item>
         <el-form-item label="分组">
           <el-select v-model="form.groupName" placeholder="选择或输入分组" clearable filterable allow-create style="width:100%">
@@ -124,7 +130,7 @@ const dialogVisible = ref(false)
 const isEdit = ref(false)
 const formRef = ref()
 const importFileRef = ref<HTMLInputElement>()
-const form = reactive({ id: 0, flowName: '', flowType: 'sync', flowDesc: '', groupName: '' })
+const form = reactive({ id: 0, flowName: '', flowType: 'sync', flowDesc: '', groupName: '', serviceAlias: '' })
 const rules = { flowName: [{ required: true, message: '请输入流程名称', trigger: 'blur' }] }
 
 onMounted(() => { loadData(); loadGroups() })
@@ -156,13 +162,13 @@ function reset() {
 
 function openAdd() {
   isEdit.value = false
-  Object.assign(form, { id: 0, flowName: '', flowType: 'sync', flowDesc: '', groupName: '' })
+  Object.assign(form, { id: 0, flowName: '', flowType: 'sync', flowDesc: '', groupName: '', serviceAlias: '' })
   dialogVisible.value = true
 }
 
 function openEdit(row: any) {
   isEdit.value = true
-  Object.assign(form, { id: row.id, flowName: row.flowName, flowType: row.flowType, flowDesc: row.flowDesc, groupName: row.groupName || '' })
+  Object.assign(form, { id: row.id, flowName: row.flowName, flowType: row.flowType, flowDesc: row.flowDesc, groupName: row.groupName || '', serviceAlias: row.serviceAlias || '' })
   dialogVisible.value = true
 }
 
