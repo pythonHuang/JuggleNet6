@@ -38,7 +38,10 @@
           <span class="section-title">
             <el-icon color="#1890ff"><Upload /></el-icon> 入参配置
           </span>
-          <el-button size="small" type="primary" icon="Plus" @click="addParam('input')">添加入参</el-button>
+          <div style="display:flex;gap:8px">
+            <el-button size="small" icon="Plus" @click="addParam('input')">添加入参</el-button>
+            <el-button size="small" icon="CollectionTag" @click="openObjectDialog('input')">来自对象</el-button>
+          </div>
         </div>
         <el-table :data="inputParams" border size="small" empty-text="暂无入参">
           <el-table-column type="index" width="50" label="#" />
@@ -98,7 +101,10 @@
           <span class="section-title">
             <el-icon color="#52c41a"><Download /></el-icon> 出参配置
           </span>
-          <el-button size="small" type="success" icon="Plus" @click="addParam('output')">添加出参</el-button>
+          <div style="display:flex;gap:8px">
+            <el-button size="small" type="success" icon="Plus" @click="addParam('output')">添加出参</el-button>
+            <el-button size="small" icon="CollectionTag" @click="openObjectDialog('output')">来自对象</el-button>
+          </div>
         </div>
         <el-table :data="outputParams" border size="small" empty-text="暂无出参">
           <el-table-column type="index" width="50" label="#" />
@@ -153,7 +159,10 @@
           <span class="section-title">
             <el-icon color="#fa8c16"><Key /></el-icon> Header 配置（可选）
           </span>
-          <el-button size="small" icon="Plus" @click="addParam('header')">添加 Header</el-button>
+          <div style="display:flex;gap:8px">
+            <el-button size="small" icon="Plus" @click="addParam('header')">添加 Header</el-button>
+            <el-button size="small" icon="CollectionTag" @click="openObjectDialog('header')">来自对象</el-button>
+          </div>
         </div>
         <el-table :data="headerParams" border size="small" empty-text="暂无 Header">
           <el-table-column type="index" width="50" label="#" />
@@ -209,6 +218,30 @@
           <el-button size="small" @click="formatMockJson">格式化 JSON</el-button>
         </div>
       </div>
+      <!-- 来自对象对话框 -->
+      <el-dialog v-model="objectDialogVisible" :title="`选择对象 — 导入${objectDialogTypeLabel}参数`" width="480px">
+        <el-form label-width="80px">
+          <el-form-item label="选择对象">
+            <el-select v-model="selectedObjectId" placeholder="请选择对象类型" style="width:100%" @change="onObjectSelect">
+              <el-option v-for="obj in objectList" :key="obj.id" :label="`${obj.objectName} (${obj.objectCode})`" :value="obj.id" />
+            </el-select>
+          </el-form-item>
+        </el-form>
+        <el-divider v-if="previewParams.length > 0" />
+        <el-table v-if="previewParams.length > 0" :data="previewParams" border size="small" max-height="300">
+          <el-table-column prop="paramCode" label="参数Code" />
+          <el-table-column prop="paramName" label="参数名" />
+          <el-table-column label="数据类型" width="100">
+            <template #default="{ row }">
+              <el-tag size="small">{{ row.dataType }}</el-tag>
+            </template>
+          </el-table-column>
+        </el-table>
+        <template #footer>
+          <el-button @click="objectDialogVisible = false">取消</el-button>
+          <el-button type="primary" :disabled="previewParams.length === 0" @click="importObjectParams">导入到参数列表</el-button>
+        </template>
+      </el-dialog>
     </el-card>
   </div>
 </template>
@@ -232,8 +265,15 @@ const headerParams = ref<any[]>([])
 const mockEnabled = ref(false)
 const mockJson = ref('')
 
-// paramType: 1=入参, 2=出参, 3=header
-const PARAM_TYPE = { input: 1, output: 2, header: 3 }
+// 来自对象功能
+const objectDialogVisible = ref(false)
+const objectDialogType = ref<'input' | 'output' | 'header'>('input')
+const objectList = ref<any[]>([])
+const selectedObjectId = ref<number | null>(null)
+const previewParams = ref<any[]>([])
+
+// paramType: 1=入参, 2=出参, 3=对象属性, 4=header
+const PARAM_TYPE = { input: 1, output: 2, header: 4 }
 
 onMounted(async () => {
   loading.value = true
@@ -300,6 +340,49 @@ async function saveParams(type: 'input' | 'output' | 'header') {
   })
   ElMessage.success(`${type === 'input' ? '入参' : type === 'output' ? '出参' : 'Header'} 保存成功`)
   await loadParams(type)
+}
+
+const objectDialogTypeLabel = { input: '入参', output: '出参', header: 'Header' } as const
+
+async function openObjectDialog(type: 'input' | 'output' | 'header') {
+  objectDialogType.value = type
+  selectedObjectId.value = null
+  previewParams.value = []
+  objectDialogVisible.value = true
+  // 加载对象列表
+  const res: any = await request.get('/object/list')
+  objectList.value = res.data || []
+}
+
+async function onObjectSelect(objectId: number) {
+  const res: any = await request.get('/parameter/list', { params: { ownerId: objectId, paramType: 3 } })
+  previewParams.value = (res.data || []).map((p: any) => ({
+    ...p,
+    // 确保默认值适配参数表格
+    required: p.required ?? 0,
+    defaultValue: p.defaultValue ?? '',
+    description: p.description ?? '',
+    objectCode: p.objectCode ?? ''
+  }))
+}
+
+function importObjectParams() {
+  const target = objectDialogType.value === 'input' ? inputParams
+    : objectDialogType.value === 'output' ? outputParams
+    : headerParams
+  for (const p of previewParams.value) {
+    target.value.push({
+      paramCode: p.paramCode,
+      paramName: p.paramName,
+      dataType: p.dataType || 'string',
+      required: p.required ?? 0,
+      defaultValue: p.defaultValue ?? '',
+      description: p.description ?? '',
+      objectCode: p.objectCode ?? ''
+    })
+  }
+  objectDialogVisible.value = false
+  ElMessage.success(`已导入 ${previewParams.value.length} 个参数，请手动保存`)
 }
 
 function methodColor(type: string) {
