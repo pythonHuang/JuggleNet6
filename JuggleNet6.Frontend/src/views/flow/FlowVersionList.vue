@@ -206,14 +206,34 @@ async function executeTriggerTest() {
   } finally { testLoading.value = false }
 }
 
+function copyToClipboard(text: string) {
+  if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+    navigator.clipboard.writeText(text).then(() => {
+      ElMessage.success('已复制到剪贴板')
+    }).catch(() => { ElMessage.error('复制失败') })
+    return
+  }
+  // 降级方案：适用于非 HTTPS 环境
+  try {
+    const ta = document.createElement('textarea')
+    ta.value = text
+    ta.style.position = 'fixed'
+    ta.style.left = '-9999px'
+    document.body.appendChild(ta)
+    ta.focus()
+    ta.select()
+    document.execCommand('copy')
+    document.body.removeChild(ta)
+    ElMessage.success('已复制到剪贴板')
+  } catch {
+    ElMessage.error('复制失败，请手动复制')
+  }
+}
+
 function copyVersionUrl(row: any) {
   const baseUrl = window.location.origin
   const url = `${baseUrl}/open/flow/trigger/${row.version}/${flowKey}\nMethod: POST\nHeader: X-Access-Token: <your-token>\nBody: {"flowData": {}}`
-  navigator.clipboard.writeText(url).then(() => {
-    ElMessage.success('调用地址已复制到剪贴板')
-  }).catch(() => {
-    ElMessage.error('复制失败')
-  })
+  copyToClipboard(url)
 }
 
 function openDiffDialog() {
@@ -313,9 +333,7 @@ function formatJson() {
 }
 
 function copyJson() {
-  navigator.clipboard.writeText(jsonContent.value).then(() => {
-    ElMessage.success('已复制到剪贴板')
-  })
+  copyToClipboard(jsonContent.value)
 }
 </script>
 

@@ -128,7 +128,7 @@ public class FlowOpenController : ControllerBase
     /// 通过服务别名触发流程（GET），自动查找对应流程并执行最新已发布版本。
     /// 访问地址: /open/services/{alias}
     /// </summary>
-    [HttpGet("services/{alias}")]
+    [HttpGet("~/open/services/{alias}")]
     public async Task<ApiResult> ServiceGet(string alias,
         [FromQuery] Dictionary<string, string> queryParams,
         [FromHeader(Name = "X-Access-Token")] string? token)
@@ -147,7 +147,7 @@ public class FlowOpenController : ControllerBase
     /// 通过服务别名触发流程（POST），自动查找对应流程并执行最新已发布版本。
     /// 访问地址: /open/services/{alias}
     /// </summary>
-    [HttpPost("services/{alias}")]
+    [HttpPost("~/open/services/{alias}")]
     public async Task<ApiResult> ServicePost(string alias,
         [FromBody] Dictionary<string, object?> bodyParams,
         [FromHeader(Name = "X-Access-Token")] string? token)
